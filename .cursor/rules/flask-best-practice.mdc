@@ -1,0 +1,37 @@
+---
+description: 
+globs: app/*.py,app/**/*.py
+alwaysApply: false
+---
+## Flask General
+
+- Use Flask factory pattern
+- Use Blueprints to organize your application structure
+- Use environment variables for configuration management
+- Leverage Flask-SQLAlchemy for database operations
+- Use Flask-WTF for form handling and validation
+- Use Flask-RESTful for building RESTful APIs
+- Use Flask-Migrate for database migrations
+- Use Flask-Login for authentication
+- Implement caching mechanisms to improve performance
+- Implement proper error handling with custom error pages
+- Implement proper session management and security measures
+- Implement logging for better debugging and monitoring
+- Structure views with proper separation of concerns
+- Separate partials, css, Javascript files for better maintainance
+
+## Database
+- Use SQLAlchemy ORM
+- Implement database migrations with Alembic
+- Use proper connection pooling
+- Define models in separate modules
+- Implement proper relationships
+- Use proper indexing strategies
+
+## Performance
+- Use proper caching with Flask-Caching
+- Implement database query optimization
+- Use proper connection pooling
+- Implement proper pagination
+- Use background tasks for heavy operations
+- Monitor application performance

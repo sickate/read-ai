@@ -1,0 +1,30 @@
+---
+description: 
+globs: *.py
+alwaysApply: false
+---
+
+# Your rule content
+
+代码风格
+
+- 编写模块化的、高效的、精简的代码
+- 遵循 Black 代码格式化规则
+- 使用 isort 对导入进行排序
+- 遵循 PEP 8 命名规范：
+- 函数和变量使用 snake_case
+- 类使用 PascalCase
+- 常量使用 UPPER_CASE
+- 单行最大长度为 88 个字符（Black 默认值）
+- 使用绝对导入而非相对导入
+- 仅在事前确定可能的错误类型，且该错误无法通过编程避免的情况下使用 try-except。在一般情况下，让错误抛出，便于发现和修复它们。永远不要 except 通用的错误。
+- 不要修改已经写好的 API 调用的方法名，除非被明确要求
+
+工具选择
+
+- 在耗时的循环中使用 tqdm 来提供良好的进度监控
+- 使用 pendulum (import pendulum as pdl) 来处理所有的时间对象
+- 优先使用 [requirements.txt](mdc:requirements.txt) 中的库和工具
+- 使用 click 开发命令行工具，并为每个命令实现:
+  - `--verbose` 功能 (用于将 logger level 置为 debug)
+  - 短的 alias，方便用户调用

@@ -1,0 +1,17 @@
+---
+description: 
+globs: *.html,*.js,*.css,*.ts,*.tsx
+alwaysApply: false
+---
+---
+name: bootstrap-best-practices.mdc
+description: Best practices for using Bootstrap in web development
+globs: **/*.{html,js,ts,tsx}
+---
+
+- Use Bootstrap's utility classes for responsive design. Make sure it works well on both Mobile and PC/MacOS
+- Leverage Bootstrap's grid system for layout consistency
+- Customize Bootstrap variables for theming
+- Utilize Bootstrap's JavaScript components for interactive elements
+- Ensure accessibility by using Bootstrap's built-in ARIA attributes
+
