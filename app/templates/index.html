@@ -360,7 +360,87 @@
         updateBookOptions();
         updateDiscOptions();
         updateAudioOptions();
-        loadAudio(0);
+        
+        // 添加 Cookie 功能
+        function saveLastPlayedContent() {
+            const lastPlayed = {
+                book: currentBook,
+                disc: currentDisc,
+                index: currentIndex,
+                time: audioPlayer.currentTime
+            };
+            
+            // 设置 cookie，有效期 30 天
+            const expires = new Date();
+            expires.setTime(expires.getTime() + 30 * 24 * 60 * 60 * 1000);
+            document.cookie = `lastPlayed=${JSON.stringify(lastPlayed)};expires=${expires.toUTCString()};path=/`;
+        }
+        
+        function getLastPlayedContent() {
+            const cookies = document.cookie.split(';');
+            for (const cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if (name === 'lastPlayed') {
+                    try {
+                        return JSON.parse(decodeURIComponent(value));
+                    } catch (e) {
+                        console.error('Failed to parse last played cookie:', e);
+                        return null;
+                    }
+                }
+            }
+            return null;
+        }
+        
+        function loadLastPlayedContent() {
+            const lastPlayed = getLastPlayedContent();
+            if (!lastPlayed) {
+                // 没有之前的播放记录，加载第一个
+                loadAudio(0);
+                return;
+            }
+            
+            // 设置选项
+            if (lastPlayed.book && audioTree[lastPlayed.book]) {
+                bookSelect.value = lastPlayed.book;
+                currentBook = lastPlayed.book;
+                
+                updateDiscOptions();
+                
+                if (lastPlayed.disc && audioTree[lastPlayed.book][lastPlayed.disc]) {
+                    discSelect.value = lastPlayed.disc;
+                    currentDisc = lastPlayed.disc;
+                    
+                    updateAudioOptions();
+                    
+                    if (typeof lastPlayed.index === 'number' && audioFiles[lastPlayed.index]) {
+                        // 加载音频
+                        loadAudio(lastPlayed.index);
+                        
+                        // 设置播放位置
+                        if (typeof lastPlayed.time === 'number') {
+                            audioPlayer.addEventListener('canplay', function setTime() {
+                                audioPlayer.currentTime = lastPlayed.time;
+                                audioPlayer.removeEventListener('canplay', setTime);
+                            });
+                        }
+                        
+                        return;
+                    }
+                }
+            }
+            
+            // 如果任何条件不满足，加载第一个
+            loadAudio(0);
+        }
+        
+        // 保存播放位置的事件
+        audioPlayer.addEventListener('pause', saveLastPlayedContent);
+        audioPlayer.addEventListener('ended', saveLastPlayedContent);
+        window.addEventListener('beforeunload', saveLastPlayedContent);
+        
+        // 启动时加载上次播放的内容
+        loadLastPlayedContent();
         updateSpeedDisplay();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
