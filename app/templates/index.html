@@ -233,8 +233,9 @@
         async function loadSubtitle(book, disc, file) {
             if (!book || !disc || !file) return;
 
-            // replace mp3 to srt
-            file_name = file.replace('.mp3', '.srt');
+            // 获取不带扩展名的文件名，然后添加.srt扩展名
+            const fileNameWithoutExt = file.substring(0, file.lastIndexOf('.')) || file;
+            const file_name = fileNameWithoutExt + '.srt';
             const subtitleUrl = `/subtitles/${encodeURIComponent(book)}/${encodeURIComponent(disc)}/${encodeURIComponent(file_name)}`;
             try {
                 const resp = await fetch(subtitleUrl);
@@ -315,7 +316,19 @@
         // 切换音频时加载字幕
         function loadAudio(index) {
             if (!audioFiles.length) return;
+            const file = audioFiles[index];
             audioSource.src = getAudioUrl(index);
+            
+            // 根据文件扩展名设置正确的 MIME 类型
+            const fileExt = file.toLowerCase().split('.').pop();
+            if (fileExt === 'm4a') {
+                audioSource.type = 'audio/mp4';
+            } else if (fileExt === 'mp3') {
+                audioSource.type = 'audio/mpeg';
+            } else {
+                audioSource.type = 'audio/mpeg'; // 默认
+            }
+            
             audioPlayer.load();
             currentIndex = index;
             audioSelect.selectedIndex = index;

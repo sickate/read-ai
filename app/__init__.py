@@ -20,7 +20,7 @@ def index():
             disc_path = os.path.join(book_path, disc)
             if not os.path.isdir(disc_path):
                 continue
-            files = [f for f in os.listdir(disc_path) if f.lower().endswith('.mp3')]
+            files = [f for f in os.listdir(disc_path) if f.lower().endswith(('.mp3', '.m4a'))]
             files.sort()
             audio_tree[book][disc] = files
     return render_template('index.html', audio_tree=audio_tree)
@@ -171,13 +171,16 @@ def generate_subtitle():
     )
     
     try:
+        # 获取不带扩展名的文件名
+        filename_without_ext = os.path.splitext(filename)[0]
+        
         # 使用公共可访问的URL生成字幕
-        srt_content = get_or_generate_subtitle(public_sample_url, book, disc, filename.replace('.mp3', ''))
+        srt_content = get_or_generate_subtitle(public_sample_url, book, disc, filename_without_ext)
         
         # 返回成功结果
         return jsonify({
             "success": True,
-            "subtitle_url": f"/subtitles/{book}/{disc}/{filename.replace('.mp3', '')}.srt"
+            "subtitle_url": f"/subtitles/{book}/{disc}/{filename_without_ext}.srt"
         })
     except Exception as e:
         # 返回错误信息
