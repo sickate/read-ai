@@ -2,6 +2,7 @@ from flask import Flask, render_template, url_for, request, jsonify, send_file
 import os
 from app.llm.volcano_audio import get_or_generate_subtitle
 import requests
+from utils.text_helper import analyze_text
 
 app = Flask(__name__)
 
@@ -185,6 +186,47 @@ def generate_subtitle():
     except Exception as e:
         # 返回错误信息
         return jsonify({"error": str(e)}), 500
+
+@app.route('/word-counter')
+def word_counter():
+    """作文字数统计页面"""
+    return render_template('word_counter.html')
+
+@app.route('/api/analyze-text', methods=['POST'])
+def api_analyze_text():
+    """
+    分析文本的API接口
+    接收POST请求，包含text参数
+    返回文本分析结果
+    """
+    try:
+        data = request.json
+        if not data or 'text' not in data:
+            return jsonify({
+                "success": False,
+                "error": "缺少text参数"
+            }), 400
+        
+        text = data['text']
+        if not text.strip():
+            return jsonify({
+                "success": False,
+                "error": "文本内容不能为空"
+            }), 400
+        
+        # 使用text_helper中的analyze_text函数分析文本
+        result = analyze_text(text)
+        
+        return jsonify({
+            "success": True,
+            "result": result
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 
