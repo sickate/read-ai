@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>24点游戏 - English Reader</title>
+    <title>24点游戏 - 超能力训练场</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -90,28 +90,7 @@
                 <i class="fas fa-gamepad me-2"></i>24点游戏
             </h1>
             
-            <!-- 导航栏 -->
-            <nav class="navbar navbar-expand-lg navbar-light bg-light rounded mb-4">
-                <div class="container-fluid">
-                    <ul class="navbar-nav me-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="/">
-                                <i class="fas fa-home me-1"></i>首页
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/word-counter">
-                                <i class="fas fa-calculator me-1"></i>作文字数统计
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link active" href="/game-24">
-                                <i class="fas fa-gamepad me-1"></i>24点游戏
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
+            {% include '_navigation.html' %}
 
             <!-- 游戏设置 -->
             <div class="game-controls">

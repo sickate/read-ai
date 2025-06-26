@@ -25,7 +25,7 @@ def index():
             files = [f for f in os.listdir(disc_path) if f.lower().endswith(('.mp3', '.m4a'))]
             files.sort()
             audio_tree[book][disc] = files
-    return render_template('index.html', audio_tree=audio_tree)
+    return render_template('index.html', audio_tree=audio_tree, current_page='home')
 
 @app.route('/audio/<path:filename>')
 def serve_audio(filename):
@@ -191,7 +191,7 @@ def generate_subtitle():
 @app.route('/word-counter')
 def word_counter():
     """作文字数统计页面"""
-    return render_template('word_counter.html')
+    return render_template('word_counter.html', current_page='word-counter')
 
 @app.route('/api/analyze-text', methods=['POST'])
 def api_analyze_text():
@@ -232,7 +232,7 @@ def api_analyze_text():
 @app.route('/game-24')
 def game_24_page():
     """24点游戏页面"""
-    return render_template('game_24.html')
+    return render_template('game_24.html', current_page='game-24')
 
 @app.route('/api/game-24/new-game', methods=['POST'])
 def new_24_game():

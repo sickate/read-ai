@@ -59,6 +59,7 @@ class XAIModel(str, Enum):
     GROK_2_VISION = 'grok-2-vision-1212'
     GROK_2 = 'grok-2-1212'
 
+
 class GeminiModel(str, Enum):
     """Gemini模型枚举"""
     GEMINI_2_5_PRO_EXP = "gemini-2.5-pro-exp-03-25"
