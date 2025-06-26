@@ -3,6 +3,7 @@ import os
 from app.llm.volcano_audio import get_or_generate_subtitle
 import requests
 from utils.text_helper import analyze_text
+from app.game_24 import game_24
 
 app = Flask(__name__)
 
@@ -220,6 +221,108 @@ def api_analyze_text():
         return jsonify({
             "success": True,
             "result": result
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/game-24')
+def game_24_page():
+    """24点游戏页面"""
+    return render_template('game_24.html')
+
+@app.route('/api/game-24/new-game', methods=['POST'])
+def new_24_game():
+    """开始新的24点游戏"""
+    try:
+        data = request.json or {}
+        game_mode = data.get('mode', '24')  # '24' 或 '60'
+        only_solvable = data.get('only_solvable', False)
+        
+        # 根据模式确定卡牌数量和目标值
+        if game_mode == '60':
+            num_cards = 5
+            target = 60
+        else:
+            num_cards = 4
+            target = 24
+        
+        # 生成卡牌
+        if only_solvable:
+            cards = game_24.generate_solvable_cards(num_cards, target)
+        else:
+            cards = game_24.generate_cards(num_cards)
+        
+        # 获取解答（如果需要）
+        solutions = game_24.solve_24(cards, target) if only_solvable else []
+        
+        return jsonify({
+            "success": True,
+            "cards": cards,
+            "target": target,
+            "has_solution": len(solutions) > 0,
+            "solutions": solutions[:3]  # 最多返回3个解答
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/game-24/verify', methods=['POST'])
+def verify_24_answer():
+    """验证24点游戏答案"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"success": False, "error": "缺少请求数据"}), 400
+        
+        expression = data.get('expression', '').strip()
+        cards = data.get('cards', [])
+        target = data.get('target', 24)
+        
+        if not expression or not cards:
+            return jsonify({"success": False, "error": "缺少表达式或卡牌"}), 400
+        
+        # 验证答案
+        is_correct = game_24.verify_answer(expression, cards, target)
+        
+        return jsonify({
+            "success": True,
+            "is_correct": is_correct
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/game-24/solutions', methods=['POST'])
+def get_24_solutions():
+    """获取24点游戏的解答"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"success": False, "error": "缺少请求数据"}), 400
+        
+        cards = data.get('cards', [])
+        target = data.get('target', 24)
+        
+        if not cards:
+            return jsonify({"success": False, "error": "缺少卡牌"}), 400
+        
+        # 获取解答
+        solutions = game_24.solve_24(cards, target)
+        
+        return jsonify({
+            "success": True,
+            "solutions": solutions,
+            "has_solution": len(solutions) > 0
         })
         
     except Exception as e:

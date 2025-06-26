@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>24点游戏 - English Reader</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .card-display {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            margin: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        .card-display:hover {
+            transform: translateY(-3px);
+        }
+        .game-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .timer-display {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #dc3545;
+        }
+        .solution-item {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+        }
+        .mode-badge {
+            font-size: 1.2rem;
+            padding: 8px 16px;
+        }
+        .expression-input {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+        }
+        .game-controls {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .result-display {
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .result-correct {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .result-incorrect {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .hint-section {
+            background-color: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="game-container">
+            <h1 class="text-center mb-4">
+                <i class="fas fa-gamepad me-2"></i>24点游戏
+            </h1>
+            
+            <!-- 导航栏 -->
+            <nav class="navbar navbar-expand-lg navbar-light bg-light rounded mb-4">
+                <div class="container-fluid">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">
+                                <i class="fas fa-home me-1"></i>首页
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/word-counter">
+                                <i class="fas fa-calculator me-1"></i>作文字数统计
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/game-24">
+                                <i class="fas fa-gamepad me-1"></i>24点游戏
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- 游戏设置 -->
+            <div class="game-controls">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label">游戏模式：</label>
+                        <select class="form-select" id="gameMode">
+                            <option value="24">24点模式 (4张牌)</option>
+                            <option value="60">60点模式 (5张牌)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="onlySolvable">
+                            <label class="form-check-label" for="onlySolvable">
+                                只生成有解的组合
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary w-100" id="newGameBtn">
+                            <i class="fas fa-refresh me-1"></i>新游戏
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="text-center">
+                            <span class="mode-badge badge bg-primary" id="targetDisplay">目标: 24</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 卡牌显示区域 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="card-title text-center mb-3">你的卡牌</h5>
+                    <div class="row" id="cardsDisplay">
+                        <!-- 卡牌将在这里动态生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 答案输入区域 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">输入你的答案</h5>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <input type="text" class="form-control expression-input" id="expressionInput" 
+                                   placeholder="例如: (8-4) * (7-1) 或 8*3-6/2" />
+                            <div class="form-text">
+                                支持运算符: + - * / ** (乘方) sqrt() (开方) pow() (幂运算)
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-success w-100" id="submitBtn">
+                                <i class="fas fa-check me-1"></i>提交答案
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 结果显示区域 -->
+            <div id="resultDisplay" style="display: none;"></div>
+
+            <!-- 倒计时和答案显示 -->
+            <div class="card shadow-sm mb-4" id="solutionCard" style="display: none;">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="card-title">
+                                <i class="fas fa-lightbulb me-2"></i>答案提示
+                                <span class="timer-display" id="timerDisplay"></span>
+                            </h5>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-warning" id="showSolutionBtn" disabled>
+                                <i class="fas fa-eye me-1"></i>查看答案
+                            </button>
+                        </div>
+                    </div>
+                    <div id="solutionsDisplay" style="display: none;">
+                        <!-- 答案将在这里显示 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 使用说明 -->
+            <div class="hint-section">
+                <h6><i class="fas fa-info-circle me-2"></i>游戏说明</h6>
+                <ul class="mb-0">
+                    <li>使用给定的卡牌和四则运算符计算出目标值</li>
+                    <li>每张卡牌只能使用一次</li>
+                    <li>支持括号、乘方(**) 和开方(sqrt)</li>
+                    <li>J=11, Q=12, K=13, A=1</li>
+                    <li>可以在5秒后查看答案提示</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        class Game24 {
+            constructor() {
+                this.currentCards = [];
+                this.currentTarget = 24;
+                this.timer = null;
+                this.countdown = 5;
+                this.solutions = [];
+                this.initializeElements();
+                this.bindEvents();
+                this.startNewGame();
+            }
+
+            initializeElements() {
+                this.gameMode = document.getElementById('gameMode');
+                this.onlySolvable = document.getElementById('onlySolvable');
+                this.newGameBtn = document.getElementById('newGameBtn');
+                this.targetDisplay = document.getElementById('targetDisplay');
+                this.cardsDisplay = document.getElementById('cardsDisplay');
+                this.expressionInput = document.getElementById('expressionInput');
+                this.submitBtn = document.getElementById('submitBtn');
+                this.resultDisplay = document.getElementById('resultDisplay');
+                this.solutionCard = document.getElementById('solutionCard');
+                this.timerDisplay = document.getElementById('timerDisplay');
+                this.showSolutionBtn = document.getElementById('showSolutionBtn');
+                this.solutionsDisplay = document.getElementById('solutionsDisplay');
+            }
+
+            bindEvents() {
+                this.newGameBtn.addEventListener('click', () => this.startNewGame());
+                this.submitBtn.addEventListener('click', () => this.submitAnswer());
+                this.showSolutionBtn.addEventListener('click', () => this.showSolutions());
+                this.expressionInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.submitAnswer();
+                    }
+                });
+                this.gameMode.addEventListener('change', () => this.updateTargetDisplay());
+            }
+
+            updateTargetDisplay() {
+                const mode = this.gameMode.value;
+                const target = mode === '60' ? 60 : 24;
+                this.targetDisplay.textContent = `目标: ${target}`;
+            }
+
+            async startNewGame() {
+                try {
+                    this.clearTimer();
+                    this.hideResult();
+                    this.hideSolutionCard();
+                    this.expressionInput.value = '';
+                    this.expressionInput.focus();
+
+                    const response = await fetch('/api/game-24/new-game', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            mode: this.gameMode.value,
+                            only_solvable: this.onlySolvable.checked
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        this.currentCards = data.cards;
+                        this.currentTarget = data.target;
+                        this.solutions = data.solutions || [];
+                        this.displayCards();
+                        this.updateTargetDisplay();
+                        this.startTimer();
+                    } else {
+                        this.showError('生成游戏失败: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showError('网络错误: ' + error.message);
+                }
+            }
+
+            displayCards() {
+                this.cardsDisplay.innerHTML = '';
+                this.currentCards.forEach(card => {
+                    const cardElement = document.createElement('div');
+                    cardElement.className = 'col-md-' + (12 / this.currentCards.length);
+                    cardElement.innerHTML = `
+                        <div class="card-display">
+                            ${card}
+                        </div>
+                    `;
+                    this.cardsDisplay.appendChild(cardElement);
+                });
+            }
+
+            startTimer() {
+                this.countdown = 5;
+                this.solutionCard.style.display = 'block';
+                this.updateTimerDisplay();
+                
+                this.timer = setInterval(() => {
+                    this.countdown--;
+                    this.updateTimerDisplay();
+                    
+                    if (this.countdown <= 0) {
+                        this.clearTimer();
+                        this.showSolutionBtn.disabled = false;
+                        this.timerDisplay.innerHTML = '<span class="text-success">可以查看答案了！</span>';
+                    }
+                }, 1000);
+            }
+
+            updateTimerDisplay() {
+                if (this.countdown > 0) {
+                    this.timerDisplay.innerHTML = `<span class="text-danger">${this.countdown}秒后可查看答案</span>`;
+                }
+            }
+
+            clearTimer() {
+                if (this.timer) {
+                    clearInterval(this.timer);
+                    this.timer = null;
+                }
+            }
+
+            async submitAnswer() {
+                const expression = this.expressionInput.value.trim();
+                if (!expression) {
+                    this.showError('请输入表达式');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/game-24/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            expression: expression,
+                            cards: this.currentCards,
+                            target: this.currentTarget
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        if (data.is_correct) {
+                            this.showSuccess('🎉 恭喜你！答案正确！');
+                            this.clearTimer();
+                        } else {
+                            this.showError('❌ 答案不正确，请重试');
+                        }
+                    } else {
+                        this.showError('验证失败: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showError('网络错误: ' + error.message);
+                }
+            }
+
+            async showSolutions() {
+                try {
+                    const response = await fetch('/api/game-24/solutions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            cards: this.currentCards,
+                            target: this.currentTarget
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        this.displaySolutions(data.solutions);
+                    } else {
+                        this.showError('获取答案失败: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showError('网络错误: ' + error.message);
+                }
+            }
+
+            displaySolutions(solutions) {
+                this.solutionsDisplay.innerHTML = '';
+                
+                if (solutions.length === 0) {
+                    this.solutionsDisplay.innerHTML = '<div class="alert alert-warning">没有找到解答，这个组合可能无解。</div>';
+                } else {
+                    const solutionsHtml = solutions.map(solution => 
+                        `<div class="solution-item">${solution}</div>`
+                    ).join('');
+                    this.solutionsDisplay.innerHTML = `
+                        <h6>可能的解答：</h6>
+                        ${solutionsHtml}
+                    `;
+                }
+                
+                this.solutionsDisplay.style.display = 'block';
+            }
+
+            showSuccess(message) {
+                this.resultDisplay.innerHTML = `
+                    <div class="result-display result-correct">
+                        <i class="fas fa-check-circle me-2"></i>${message}
+                    </div>
+                `;
+                this.resultDisplay.style.display = 'block';
+            }
+
+            showError(message) {
+                this.resultDisplay.innerHTML = `
+                    <div class="result-display result-incorrect">
+                        <i class="fas fa-times-circle me-2"></i>${message}
+                    </div>
+                `;
+                this.resultDisplay.style.display = 'block';
+            }
+
+            hideResult() {
+                this.resultDisplay.style.display = 'none';
+            }
+
+            hideSolutionCard() {
+                this.solutionCard.style.display = 'none';
+                this.solutionsDisplay.style.display = 'none';
+                this.showSolutionBtn.disabled = true;
+            }
+        }
+
+        // 初始化游戏
+        document.addEventListener('DOMContentLoaded', () => {
+            new Game24();
+        });
+    </script>
+</body>
+</html>
