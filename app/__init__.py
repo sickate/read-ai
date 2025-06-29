@@ -2,7 +2,7 @@ from flask import Flask, render_template, url_for, request, jsonify, send_file
 import os
 from app.llm.volcano_audio import get_or_generate_subtitle
 import requests
-from utils.text_helper import analyze_text
+from utils.text_helper import analyze_text, ai_correct_essay
 from app.game_24 import game_24
 
 app = Flask(__name__)
@@ -227,6 +227,46 @@ def api_analyze_text():
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+@app.route('/api/correct-essay', methods=['POST'])
+def api_correct_essay():
+    """
+    AI批改作文的API接口
+    接收POST请求，包含text参数
+    返回AI批改结果
+    """
+    try:
+        data = request.json
+        if not data or 'text' not in data:
+            return jsonify({
+                "success": False,
+                "error": "缺少text参数"
+            }), 400
+        
+        text = data['text']
+        if not text.strip():
+            return jsonify({
+                "success": False,
+                "error": "作文内容不能为空"
+            }), 400
+        
+        # 检查文本长度，避免过短的文本
+        if len(text.strip()) < 50:
+            return jsonify({
+                "success": False,
+                "error": "作文内容过短，请输入至少50个字符的作文"
+            }), 400
+        
+        # 使用text_helper中的ai_correct_essay函数批改作文
+        result = ai_correct_essay(text)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"服务器错误：{str(e)}"
         }), 500
 
 @app.route('/game-24')

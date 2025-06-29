@@ -1,5 +1,6 @@
 import random
 import itertools
+import re
 from typing import List, Tuple, Optional, Set
 import ast
 import operator
@@ -101,8 +102,10 @@ class Game24:
             allowed_numbers = set(map(float, card_values))
             
             # 先将表达式中的卡牌名称替换为数值
+            # 按卡牌名称长度从长到短排序，避免替换冲突（如"10"和"1"）
             processed_expr = expression
-            for card, value in self.card_values.items():
+            sorted_cards = sorted(self.card_values.items(), key=lambda x: len(x[0]), reverse=True)
+            for card, value in sorted_cards:
                 processed_expr = processed_expr.replace(card, str(value))
             
             # 预处理表达式，添加数学函数支持
@@ -203,11 +206,14 @@ class Game24:
                     value_to_card[val] = cards[j]
                     break
         
-        # 按长度从长到短排序，避免替换冲突
+        # 按数值的字符串长度从长到短排序，避免替换冲突
+        # 例如：先替换"10"再替换"1"，避免"10"被误替换为"A0"
         sorted_values = sorted(value_to_card.keys(), key=lambda x: len(str(x)), reverse=True)
         
         for val in sorted_values:
-            result = result.replace(str(val), value_to_card[val])
+            # 使用词边界替换，确保精确匹配
+            pattern = r'\b' + str(val) + r'\b'
+            result = re.sub(pattern, value_to_card[val], result)
         
         return result
     

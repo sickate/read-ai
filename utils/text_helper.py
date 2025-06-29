@@ -1,5 +1,12 @@
 import re
-from typing import Dict, Any
+from typing import Dict, Any, List
+import os
+import sys
+
+# 添加项目根目录到路径，以便导入app模块
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.llm.providers import get_provider_config, AliyunModel
 
 
 def analyze_text(text: str) -> Dict[str, Any]:
@@ -75,6 +82,146 @@ def format_analysis_result(result: Dict[str, Any]) -> str:
 📄 总字符数:     {result['total_chars']:,}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
+
+
+def ai_correct_essay(text: str) -> Dict[str, Any]:
+    """
+    使用AI批改作文，检查语法、错别字、标点符号等问题
+    
+    Args:
+        text (str): 要批改的作文内容
+        
+    Returns:
+        Dict[str, Any]: 包含批改结果的字典
+            - success: 是否成功
+            - corrections: 修改建议列表
+            - error: 错误信息（如果有）
+    """
+    if not text or not text.strip():
+        return {
+            "success": False,
+            "error": "作文内容不能为空"
+        }
+    
+    try:
+        # 获取阿里云配置
+        provider = get_provider_config('aliyun')
+        client = provider.get_llm()
+        
+        # 构建批改提示词
+        prompt = f"""请你作为一名专业的语文老师，仔细批改以下作文。请按照以下要求：
+
+1. 不要修改原文，只标出需要修改的地方
+2. 用条目的方式列出修改意见，需要包括：
+   - 病句（语法错误、表达不当）
+   - 错别字（错字、别字）
+   - 标点符号错误
+   - 语言表达方面的改进建议
+   - 内容结构方面的改进建议
+
+3. 对于语言、内容方面的修改，给出修改意见和例子，但不要给出可以直接使用的修改后原文
+4. 请用以下格式输出：
+
+## 病句修改
+- 第X段第Y句："原文内容" → 问题：具体问题描述 → 建议：如何修改的建议
+
+## 错别字修改  
+- 第X段："错字" → 应为："正字" → 位置：具体位置描述
+
+## 标点符号修改
+- 第X段：问题描述 → 建议：正确用法
+
+## 语言表达改进建议
+- 建议内容（给出建议和例子，但不直接提供修改后的原文）
+
+## 内容结构改进建议
+- 建议内容
+
+作文内容：
+{text}
+
+请开始批改："""
+
+        # 调用AI模型
+        response = client.chat.completions.create(
+            model=AliyunModel.DEEPSEEK_R1.value,
+            messages=[
+                {"role": "system", "content": "你是一名专业的语文老师，负责批改学生作文。"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        # 解析AI返回的批改结果
+        corrections = parse_correction_response(ai_response)
+        
+        return {
+            "success": True,
+            "corrections": corrections,
+            "raw_response": ai_response
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"AI批改失败：{str(e)}"
+        }
+
+
+def parse_correction_response(response: str) -> List[Dict[str, Any]]:
+    """
+    解析AI批改响应，提取各类修改建议
+    
+    Args:
+        response (str): AI的批改响应
+        
+    Returns:
+        List[Dict[str, Any]]: 解析后的修改建议列表
+    """
+    corrections = []
+    
+    # 按照不同的修改类型分割响应
+    sections = {
+        "病句修改": [],
+        "错别字修改": [],
+        "标点符号修改": [],
+        "语言表达改进建议": [],
+        "内容结构改进建议": []
+    }
+    
+    current_section = None
+    lines = response.split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # 检查是否是新的分类标题
+        if line.startswith('##'):
+            section_name = line.replace('##', '').strip()
+            if section_name in sections:
+                current_section = section_name
+            continue
+        
+        # 如果是列表项，添加到当前分类
+        if line.startswith('-') and current_section:
+            correction_text = line[1:].strip()
+            if correction_text:
+                sections[current_section].append(correction_text)
+    
+    # 将各个分类的内容整理成最终格式
+    for section_name, items in sections.items():
+        if items:
+            corrections.append({
+                "type": section_name,
+                "items": items
+            })
+    
+    return corrections
 
 
 if __name__ == "__main__":
