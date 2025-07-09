@@ -29,6 +29,12 @@ worker_num = 2
 address = '127.0.0.1'
 port = 5000
 log_level = 'debug'
+# 🔧 AI批改功能需要更长的超时时间
+timeout = 120  # 增加到120秒以支持AI请求
+keepalive = 10
+max_requests = 1000
+max_requests_jitter = 50
+
 # proxy_server = '172.20.1.247' # 0.0.0.0
 
 ### Before deploy to a new server:
@@ -59,7 +65,8 @@ def start_app(ctx):
         logger.info('Kill existing apps...')
         ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && kill $(pgrep -a gunicorn | awk '{{print $1}}') || true")
         logger.info('Spawning new apps...')
-        ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && nohup gunicorn app:app -w {worker_num} -b {address}:{port} --log-level {log_level}  > log/{app_name}.log 2> log/{app_name}.err &")
+        # 🔧 修复：添加AI批改所需的超时和流式输出配置
+        ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && nohup gunicorn app:app -w {worker_num} -b {address}:{port} --timeout {timeout} --keep-alive {keepalive} --max-requests {max_requests} --max-requests-jitter {max_requests_jitter} --log-level {log_level} > log/{app_name}.log 2> log/{app_name}.err &")
         logger.info("Server started.")
     else:
         activate_cmd = f'source ~/.virtualenvs/{app_name}/bin/activate'
@@ -67,7 +74,8 @@ def start_app(ctx):
             logger.info('Kill existing apps...')
             ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && kill $(pgrep -a gunicorn | awk '{{print $1}}') || true")
             logger.info('Spawning new apps...')
-            ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && nohup gunicorn app:app -w {worker_num} -b {address}:{port} --log-level {log_level}  > log/{app_name}.log 2> log/{app_name}.err &")
+            # 🔧 修复：添加AI批改所需的超时和流式输出配置
+            ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && nohup gunicorn app:app -w {worker_num} -b {address}:{port} --timeout {timeout} --keep-alive {keepalive} --max-requests {max_requests} --max-requests-jitter {max_requests_jitter} --log-level {log_level} > log/{app_name}.log 2> log/{app_name}.err &")
 
             logger.info("Server started.")
 
