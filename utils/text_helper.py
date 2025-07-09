@@ -84,12 +84,14 @@ def format_analysis_result(result: Dict[str, Any]) -> str:
 """
 
 
-def ai_correct_essay(text: str) -> Dict[str, Any]:
+def ai_correct_essay(text: str, word_count: str = "不限字数", grade: str = "三年级") -> Dict[str, Any]:
     """
     使用AI批改作文，检查语法、错别字、标点符号等问题
     
     Args:
         text (str): 要批改的作文内容
+        word_count (str): 作文字数要求
+        grade (str): 年级
         
     Returns:
         Dict[str, Any]: 包含批改结果的字典
@@ -109,18 +111,37 @@ def ai_correct_essay(text: str) -> Dict[str, Any]:
         client = provider.get_llm()
         
         # 构建批改提示词
-        prompt = f"""请你作为一名专业的语文老师，仔细批改以下作文。请按照以下要求：
+        grade_requirements = {
+            "一年级": "简单语句，基本表达清楚",
+            "二年级": "句子通顺，有基本的段落概念",
+            "三年级": "语句通顺，有开头、中间、结尾",
+            "四年级": "结构清楚，语言较为流畅",
+            "五年级": "内容充实，语言生动",
+            "六年级": "文章结构完整，语言准确生动",
+            "初一": "观点明确，论证有条理",
+            "初二": "语言表达准确，有一定文采",
+            "初三": "思想深刻，语言优美，结构严谨"
+        }
+        
+        grade_req = grade_requirements.get(grade, "语句通顺，内容完整")
+        word_count_req = f"字数要求：{word_count}" if word_count != "不限字数" else "字数无特殊要求"
+        
+        prompt = f"""请你作为一名专业的语文老师，仔细批改以下{grade}学生的作文。
 
+【作文要求】
+- 年级：{grade}
+- {word_count_req}
+- 评判标准：{grade_req}
+
+【批改要求】
 1. 不要修改原文，只标出需要修改的地方
-2. 用条目的方式列出修改意见，需要包括：
-   - 病句（语法错误、表达不当）
-   - 错别字（错字、别字）
-   - 标点符号错误
-   - 语言表达方面的改进建议
-   - 内容结构方面的改进建议
+2. 请按照以下格式输出，每个部分都要包含：
 
-3. 对于语言、内容方面的修改，给出修改意见和例子，但不要给出可以直接使用的修改后原文
-4. 请用以下格式输出：
+## 总体评价
+- 总体印象：（对整篇作文的总体评价）
+- 优点：（列出作文的优点）
+- 主要问题：（列出主要需要改进的问题）
+- 建议得分：（按{grade}标准给出建议分数，满分100分）
 
 ## 病句修改
 - 第X段第Y句："原文内容" → 问题：具体问题描述 → 建议：如何修改的建议
@@ -137,7 +158,7 @@ def ai_correct_essay(text: str) -> Dict[str, Any]:
 ## 内容结构改进建议
 - 建议内容
 
-作文内容：
+【作文内容】
 {text}
 
 请开始批改："""
@@ -171,12 +192,14 @@ def ai_correct_essay(text: str) -> Dict[str, Any]:
         }
 
 
-def ai_correct_essay_stream(text: str):
+def ai_correct_essay_stream(text: str, word_count: str = "不限字数", grade: str = "三年级"):
     """
     使用AI批改作文的流式版本，实时输出思考过程
     
     Args:
         text (str): 要批改的作文内容
+        word_count (str): 作文字数要求
+        grade (str): 年级
         
     Yields:
         Dict[str, Any]: 包含流式输出的字典
@@ -198,18 +221,37 @@ def ai_correct_essay_stream(text: str):
         client = provider.get_llm()
         
         # 构建批改提示词
-        prompt = f"""请你作为一名专业的语文老师，仔细批改以下作文。请按照以下要求：
+        grade_requirements = {
+            "一年级": "简单语句，基本表达清楚",
+            "二年级": "句子通顺，有基本的段落概念",
+            "三年级": "语句通顺，有开头、中间、结尾",
+            "四年级": "结构清楚，语言较为流畅",
+            "五年级": "内容充实，语言生动",
+            "六年级": "文章结构完整，语言准确生动",
+            "初一": "观点明确，论证有条理",
+            "初二": "语言表达准确，有一定文采",
+            "初三": "思想深刻，语言优美，结构严谨"
+        }
+        
+        grade_req = grade_requirements.get(grade, "语句通顺，内容完整")
+        word_count_req = f"字数要求：{word_count}" if word_count != "不限字数" else "字数无特殊要求"
+        
+        prompt = f"""请你作为一名专业的语文老师，仔细批改以下{grade}学生的作文。
 
+【作文要求】
+- 年级：{grade}
+- {word_count_req}
+- 评判标准：{grade_req}
+
+【批改要求】
 1. 不要修改原文，只标出需要修改的地方
-2. 用条目的方式列出修改意见，需要包括：
-   - 病句（语法错误、表达不当）
-   - 错别字（错字、别字）
-   - 标点符号错误
-   - 语言表达方面的改进建议
-   - 内容结构方面的改进建议
+2. 请按照以下格式输出，每个部分都要包含：
 
-3. 对于语言、内容方面的修改，给出修改意见和例子，但不要给出可以直接使用的修改后原文。
-4. 请用以下格式输出：
+## 总体评价
+- 总体印象：（对整篇作文的总体评价）
+- 优点：（列出作文的优点）
+- 主要问题：（列出主要需要改进的问题）
+- 建议得分：（按{grade}标准给出建议分数，满分100分）
 
 ## 病句修改
 - 第X段第Y句："原文内容" → 问题：具体问题描述 → 建议：如何修改的建议
@@ -226,7 +268,7 @@ def ai_correct_essay_stream(text: str):
 ## 内容结构改进建议
 - 建议内容
 
-作文内容：
+【作文内容】
 {text}
 
 请开始批改："""
@@ -322,13 +364,24 @@ def parse_correction_response(response: str) -> List[Dict[str, Any]]:
     """
     corrections = []
     
-    # 按照不同的修改类型分割响应
+    # 按照不同的修改类型分割响应，使用更灵活的匹配
     sections = {
+        "总体评价": [],
         "病句修改": [],
         "错别字修改": [],
         "标点符号修改": [],
         "语言表达改进建议": [],
         "内容结构改进建议": []
+    }
+    
+    # 关键词映射，用于更智能的匹配
+    section_keywords = {
+        "总体评价": ["总体评价", "总体印象", "评价", "总结"],
+        "病句修改": ["病句修改", "病句", "语法错误", "句子问题"],
+        "错别字修改": ["错别字修改", "错别字", "错字", "别字", "字词错误"],
+        "标点符号修改": ["标点符号修改", "标点符号", "标点", "符号"],
+        "语言表达改进建议": ["语言表达改进建议", "语言表达", "表达建议", "语言改进"],
+        "内容结构改进建议": ["内容结构改进建议", "内容结构", "结构建议", "内容改进"]
     }
     
     current_section = None
@@ -339,18 +392,30 @@ def parse_correction_response(response: str) -> List[Dict[str, Any]]:
         if not line:
             continue
             
-        # 检查是否是新的分类标题
-        if line.startswith('##'):
-            section_name = line.replace('##', '').strip()
-            if section_name in sections:
-                current_section = section_name
+        # 检查是否是新的分类标题 - 更智能的匹配
+        if line.startswith('##') or line.startswith('#'):
+            section_title = line.replace('##', '').replace('#', '').strip()
+            
+            # 尝试直接匹配
+            if section_title in sections:
+                current_section = section_title
+                continue
+            
+            # 尝试关键词匹配
+            for section_name, keywords in section_keywords.items():
+                if any(keyword in section_title for keyword in keywords):
+                    current_section = section_name
+                    break
             continue
         
         # 如果是列表项，添加到当前分类
-        if line.startswith('-') and current_section:
+        if (line.startswith('-') or line.startswith('•') or line.startswith('*')) and current_section:
             correction_text = line[1:].strip()
             if correction_text:
                 sections[current_section].append(correction_text)
+        elif current_section and line and not line.startswith('【'):
+            # 如果没有明确的列表标记，但有内容且在某个section中，也添加进去
+            sections[current_section].append(line)
     
     # 将各个分类的内容整理成最终格式
     for section_name, items in sections.items():
@@ -359,6 +424,13 @@ def parse_correction_response(response: str) -> List[Dict[str, Any]]:
                 "type": section_name,
                 "items": items
             })
+    
+    # 如果没有解析到任何内容，尝试将整个响应作为总体评价
+    if not corrections and response.strip():
+        corrections.append({
+            "type": "总体评价",
+            "items": [response.strip()]
+        })
     
     return corrections
 

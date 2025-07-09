@@ -36,13 +36,18 @@ def test_ai_correction_api():
     for test_case in test_cases:
         print(f"\n📝 测试用例: {test_case['name']}")
         print(f"输入文本长度: {len(test_case['text'])} 字符")
+        print(f"测试参数: 年级=五年级, 字数=500字左右")
         
         try:
             # 发送POST请求
             print("正在发送请求...")
             response = requests.post(
                 url,
-                json={"text": test_case['text']},
+                json={
+                    "text": test_case['text'],
+                    "word_count": "500字左右",
+                    "grade": "五年级"
+                },
                 headers={"Content-Type": "application/json"},
                 timeout=60  # 增加超时时间，因为AI批改可能需要较长时间
             )
@@ -100,12 +105,17 @@ def test_ai_correction_api():
     test_case = test_cases[0]  # 使用第一个测试用例
     print(f"\n📝 测试流式API: {test_case['name']}")
     print(f"输入文本长度: {len(test_case['text'])} 字符")
+    print(f"测试参数: 年级=四年级, 字数=400字左右")
     
     try:
         print("正在发送流式请求...")
         response = requests.post(
             stream_url,
-            json={"text": test_case['text']},
+            json={
+                "text": test_case['text'],
+                "word_count": "400字左右",
+                "grade": "四年级"
+            },
             headers={"Content-Type": "application/json"},
             stream=True,
             timeout=60

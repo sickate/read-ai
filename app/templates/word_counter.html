@@ -117,6 +117,39 @@
             51%, 100% { opacity: 0; }
         }
         
+        /* AI思考过程栏样式 */
+        #aiThinkingOutput {
+            transition: height 0.2s ease;
+        }
+        
+        #aiThinkingOutput::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #aiThinkingOutput::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        #aiThinkingOutput::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        #aiThinkingOutput::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* 调节高度的提示 */
+        .resize-hint {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            color: #ccc;
+            font-size: 12px;
+            pointer-events: none;
+        }
+        
         /* 移动设备优化 */
         @media (max-width: 576px) {
             .container {
@@ -162,6 +195,43 @@
                             placeholder="请在此处输入您的作文内容..."
                             style="resize: vertical; min-height: 400px;"
                         ></textarea>
+                        <!-- 作文要求选择器 -->
+                        <div class="mt-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="wordCountSelect" class="form-label small">
+                                        <i class="fas fa-ruler me-1"></i>作文字数要求
+                                    </label>
+                                    <select id="wordCountSelect" class="form-select form-select-sm">
+                                        <option value="不限字数">不限字数</option>
+                                        <option value="300字左右">300字左右</option>
+                                        <option value="400字左右">400字左右</option>
+                                        <option value="500字左右">500字左右</option>
+                                        <option value="600字左右">600字左右</option>
+                                        <option value="700字左右">700字左右</option>
+                                        <option value="1000字左右">1000字左右</option>
+                                        <option value="1500字以上">1500字以上</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="gradeSelect" class="form-label small">
+                                        <i class="fas fa-graduation-cap me-1"></i>年级
+                                    </label>
+                                    <select id="gradeSelect" class="form-select form-select-sm">
+                                        <option value="一年级">一年级</option>
+                                        <option value="二年级">二年级</option>
+                                        <option value="三年级" selected>三年级</option>
+                                        <option value="四年级">四年级</option>
+                                        <option value="五年级">五年级</option>
+                                        <option value="六年级">六年级</option>
+                                        <option value="初一">初一</option>
+                                        <option value="初二">初二</option>
+                                        <option value="初三">初三</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="mt-3">
                             <button id="clearBtn" class="btn btn-outline-danger">
                                 <i class="fas fa-trash me-1"></i>清空
@@ -195,9 +265,12 @@
                                 <div id="aiThinkingContent" class="collapse show">
                                     <div class="card-body p-3">
                                         <div id="aiThinkingOutput" 
-                                             class="border rounded p-3 bg-light text-dark" 
-                                             style="height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.9em; line-height: 1.4;">
+                                             class="border rounded p-3 bg-light text-dark position-relative" 
+                                             style="height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.9em; line-height: 1.4; resize: vertical; min-height: 100px; max-height: 600px;">
                                             <div class="text-muted">等待AI开始批改...</div>
+                                            <div class="resize-hint">
+                                                <i class="fas fa-arrows-alt-v"></i>
+                                            </div>
                                         </div>
                                         <div class="mt-2 d-flex justify-content-between align-items-center">
                                             <small class="text-muted">
@@ -286,6 +359,8 @@
         const aiThinkingTitle = document.getElementById('aiThinkingTitle');
         const aiThinkingChevron = document.getElementById('aiThinkingChevron');
         const clearThinkingBtn = document.getElementById('clearThinkingBtn');
+        const wordCountSelect = document.getElementById('wordCountSelect');
+        const gradeSelect = document.getElementById('gradeSelect');
 
         // 清空文本
         clearBtn.addEventListener('click', function() {
@@ -606,6 +681,10 @@
         }
 
         function correctEssay(text) {
+            // 获取选择器的值
+            const wordCount = wordCountSelect.value;
+            const grade = gradeSelect.value;
+            
             // 显示加载状态
             correctionResults.innerHTML = `
                 <div class="text-center">
@@ -614,6 +693,12 @@
                     </div>
                     <p class="mt-2 text-muted">AI正在批改作文，请稍候...</p>
                     <small class="text-muted">这可能需要10-30秒时间</small>
+                    <div class="mt-2">
+                        <small class="text-info">
+                            <i class="fas fa-info-circle me-1"></i>
+                            年级：${grade} | 字数：${wordCount}
+                        </small>
+                    </div>
                 </div>
             `;
 
@@ -628,7 +713,11 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ text: text })
+                body: JSON.stringify({ 
+                    text: text,
+                    word_count: wordCount,
+                    grade: grade
+                })
             })
             .then(response => {
                 if (!response.ok) {
@@ -692,13 +781,21 @@
         }
 
         function fallbackCorrectEssay(text) {
+            // 获取选择器的值
+            const wordCount = wordCountSelect.value;
+            const grade = gradeSelect.value;
+            
             // 普通请求作为备用方案
             fetch('/api/correct-essay', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ text: text })
+                body: JSON.stringify({ 
+                    text: text,
+                    word_count: wordCount,
+                    grade: grade
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -752,6 +849,7 @@
             corrections.forEach((section, index) => {
                 const sectionId = `section${index}`;
                 const iconMap = {
+                    '总体评价': 'fas fa-star text-success',
                     '病句修改': 'fas fa-exclamation-triangle text-warning',
                     '错别字修改': 'fas fa-spell-check text-danger',
                     '标点符号修改': 'fas fa-quote-right text-info',

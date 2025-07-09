@@ -259,8 +259,12 @@ def api_correct_essay():
                 "error": "作文内容过短，请输入至少50个字符的作文"
             }), 400
         
+        # 获取额外参数
+        word_count = data.get('word_count', '不限字数')
+        grade = data.get('grade', '三年级')
+        
         # 使用text_helper中的ai_correct_essay函数批改作文
-        result = ai_correct_essay(text)
+        result = ai_correct_essay(text, word_count, grade)
         
         return jsonify(result)
         
@@ -305,8 +309,12 @@ def api_correct_essay_stream():
                 # 发送开始信号
                 yield f"data: {json.dumps({'type': 'thinking', 'content': '开始分析作文内容...'})}\n\n"
                 
+                # 获取额外参数
+                word_count = data.get('word_count', '不限字数')
+                grade = data.get('grade', '三年级')
+                
                 # 使用流式方式调用AI
-                result = ai_correct_essay_stream(text)
+                result = ai_correct_essay_stream(text, word_count, grade)
                 
                 for chunk in result:
                     if chunk['type'] == 'thinking':
