@@ -7,6 +7,7 @@ import json
 def test_ai_correction_api():
     """测试AI批改作文API"""
     url = "http://localhost:5000/api/correct-essay"
+    stream_url = "http://localhost:5000/api/correct-essay-stream"
     
     # 测试文本 - 包含一些错误的作文
     test_cases = [
@@ -90,7 +91,85 @@ def test_ai_correction_api():
             print(f"❌ 测试失败: {e}")
     
     print("\n" + "=" * 60)
-    print("🏁 测试完成!")
+    print("🏁 普通API测试完成!")
+    
+    # 测试流式API
+    print("\n🌊 开始测试流式API...")
+    print("=" * 60)
+    
+    test_case = test_cases[0]  # 使用第一个测试用例
+    print(f"\n📝 测试流式API: {test_case['name']}")
+    print(f"输入文本长度: {len(test_case['text'])} 字符")
+    
+    try:
+        print("正在发送流式请求...")
+        response = requests.post(
+            stream_url,
+            json={"text": test_case['text']},
+            headers={"Content-Type": "application/json"},
+            stream=True,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            print("✅ 流式API连接成功!")
+            print("📡 实时接收数据:")
+            
+            thinking_content = ""
+            thinking_count = 0
+            content_count = 0
+            print("   💭 AI思考过程:")
+            
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        try:
+                            data = json.loads(line[6:])
+                            if data['type'] == 'thinking':
+                                content = data['content']
+                                thinking_content += content
+                                content_count += 1
+                                
+                                # 实时显示思考内容，每20个字符显示一次
+                                if content_count % 20 == 0:
+                                    recent_content = thinking_content[-80:] if len(thinking_content) > 80 else thinking_content
+                                    print(f"      [{content_count:4d}] {recent_content.replace(chr(10), ' ')}")
+                                    thinking_count += 1
+                                    
+                                # 检查是否是新的分析段落
+                                if content.startswith('\n📋 开始分析：'):
+                                    print(f"      📋 {content.strip()}")
+                                    thinking_count += 1
+                                    
+                            elif data['type'] == 'result':
+                                print(f"\n   🎯 结果: 发现 {len(data['corrections'])} 个修改类别")
+                                for correction in data['corrections']:
+                                    print(f"      - {correction['type']}: {len(correction['items'])} 项")
+                                break
+                            elif data['type'] == 'error':
+                                print(f"   ❌ 错误: {data['error']}")
+                                break
+                        except json.JSONDecodeError as e:
+                            print(f"   ⚠️ JSON解析错误: {e}")
+            
+            print(f"\n   📊 总计接收到 {content_count} 个内容片段，{thinking_count} 个显示行")
+            print(f"   📝 思考内容总长度: {len(thinking_content)} 字符")
+            if thinking_content:
+                print(f"   📄 思考内容摘要: {thinking_content[:200]}...")
+            
+        else:
+            print(f"❌ 流式API HTTP错误: {response.status_code}")
+            
+    except requests.exceptions.ConnectionError:
+        print("❌ 连接失败: 请确保Flask应用正在运行")
+    except requests.exceptions.Timeout:
+        print("❌ 流式请求超时")
+    except Exception as e:
+        print(f"❌ 流式测试失败: {e}")
+    
+    print("\n" + "=" * 60)
+    print("🏁 全部测试完成!")
 
 if __name__ == "__main__":
     test_ai_correction_api() 

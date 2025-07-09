@@ -171,6 +171,145 @@ def ai_correct_essay(text: str) -> Dict[str, Any]:
         }
 
 
+def ai_correct_essay_stream(text: str):
+    """
+    使用AI批改作文的流式版本，实时输出思考过程
+    
+    Args:
+        text (str): 要批改的作文内容
+        
+    Yields:
+        Dict[str, Any]: 包含流式输出的字典
+            - type: 'thinking' | 'result' | 'error'
+            - content: 思考内容（仅当type='thinking'时）
+            - corrections: 修改建议列表（仅当type='result'时）
+            - error: 错误信息（仅当type='error'时）
+    """
+    if not text or not text.strip():
+        yield {
+            "type": "error",
+            "error": "作文内容不能为空"
+        }
+        return
+    
+    try:
+        # 获取阿里云配置
+        provider = get_provider_config('aliyun')
+        client = provider.get_llm()
+        
+        # 构建批改提示词
+        prompt = f"""请你作为一名专业的语文老师，仔细批改以下作文。请按照以下要求：
+
+1. 不要修改原文，只标出需要修改的地方
+2. 用条目的方式列出修改意见，需要包括：
+   - 病句（语法错误、表达不当）
+   - 错别字（错字、别字）
+   - 标点符号错误
+   - 语言表达方面的改进建议
+   - 内容结构方面的改进建议
+
+3. 对于语言、内容方面的修改，给出修改意见和例子，但不要给出可以直接使用的修改后原文。
+4. 请用以下格式输出：
+
+## 病句修改
+- 第X段第Y句："原文内容" → 问题：具体问题描述 → 建议：如何修改的建议
+
+## 错别字修改  
+- 第X段："错字" → 应为："正字" → 位置：具体位置描述
+
+## 标点符号修改
+- 第X段：问题描述 → 建议：正确用法
+
+## 语言表达改进建议
+- 建议内容（给出建议和例子，但不直接提供修改后的原文）
+
+## 内容结构改进建议
+- 建议内容
+
+作文内容：
+{text}
+
+请开始批改："""
+
+        yield {
+            "type": "thinking",
+            "content": "正在连接AI模型..."
+        }
+        
+        # 使用流式输出调用AI模型
+        stream = client.chat.completions.create(
+            model=AliyunModel.DEEPSEEK_R1.value,
+            messages=[
+                {"role": "system", "content": "你是一名专业的语文老师，负责批改学生作文。"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000,
+            stream=True
+        )
+        
+        yield {
+            "type": "thinking",
+            "content": "AI开始思考批改方案..."
+        }
+        
+        # 收集流式响应
+        full_response = ""
+        current_line = ""
+        
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                full_response += content
+                current_line += content
+                
+                # 实时显示AI的思考内容
+                if content:
+                    yield {
+                        "type": "thinking",
+                        "content": content
+                    }
+                
+                # 当遇到换行符时，检查是否是完整的段落标题
+                if "\n" in current_line:
+                    lines = current_line.split("\n")
+                    for line in lines[:-1]:  # 处理除最后一行外的所有行
+                        if line.strip().startswith("##"):
+                            section_name = line.strip().replace("##", "").strip()
+                            if section_name:
+                                yield {
+                                    "type": "thinking",
+                                    "content": f"\n📋 开始分析：{section_name}\n"
+                                }
+                    current_line = lines[-1]  # 保留最后一行继续处理
+        
+        yield {
+            "type": "thinking",
+            "content": "AI分析完成，正在整理批改结果..."
+        }
+        
+        # 解析AI返回的批改结果
+        corrections = parse_correction_response(full_response)
+        
+        # 发送完成信号
+        yield {
+            "type": "thinking",
+            "content": "\n✅ AI批改完成！\n"
+        }
+        
+        yield {
+            "type": "result",
+            "corrections": corrections,
+            "raw_response": full_response
+        }
+        
+    except Exception as e:
+        yield {
+            "type": "error",
+            "error": f"AI批改失败：{str(e)}"
+        }
+
+
 def parse_correction_response(response: str) -> List[Dict[str, Any]]:
     """
     解析AI批改响应，提取各类修改建议

@@ -6,6 +6,138 @@
     <title>作文字数统计 - 超能力训练场</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .row {
+                flex-direction: column;
+            }
+            
+            .col-md-7, .col-md-5 {
+                width: 100%;
+                max-width: 100%;
+                margin-bottom: 1rem;
+            }
+            
+            #aiThinkingOutput {
+                height: 150px !important;
+                font-size: 0.8em !important;
+            }
+            
+            .btn {
+                margin-bottom: 0.5rem;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+            }
+            
+            .card-body {
+                padding: 1rem !important;
+            }
+        }
+        
+        /* AI思考输出样式 */
+        #aiThinkingOutput {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            transition: all 0.2s ease;
+        }
+        
+        #aiThinkingOutput:hover {
+            background-color: #e9ecef;
+        }
+        
+        /* 折叠按钮样式 */
+        .btn-link {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
+        .btn-link:focus {
+            box-shadow: none !important;
+        }
+        
+        /* 手风琴样式 */
+        .accordion-button {
+            padding: 0.75rem 1rem;
+            font-weight: 500;
+        }
+        
+        .accordion-button:not(.collapsed) {
+            background-color: #e7f3ff;
+            border-color: #b3d9ff;
+        }
+        
+        /* 滚动条样式 */
+        #aiThinkingOutput::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #aiThinkingOutput::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        #aiThinkingOutput::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        #aiThinkingOutput::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* 动画效果 */
+        .spinner-border {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* 正在输入行的光标效果 */
+        .current-line::after {
+            content: '▊';
+            color: #007bff;
+            animation: blink 1s infinite;
+            margin-left: 2px;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        /* 移动设备优化 */
+        @media (max-width: 576px) {
+            .container {
+                padding: 0 10px;
+            }
+            
+            .btn {
+                font-size: 0.875rem;
+                padding: 0.5rem 0.75rem;
+            }
+            
+            #aiThinkingOutput {
+                height: 120px !important;
+                font-size: 0.75em !important;
+            }
+            
+            .card-header h5, .card-header h6 {
+                font-size: 1rem;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container py-5">
@@ -40,6 +172,45 @@
                             <button id="correctBtn" class="btn btn-success ms-2">
                                 <i class="fas fa-edit me-1"></i>AI批改
                             </button>
+                        </div>
+                        
+                        <!-- AI思考过程输出栏 -->
+                        <div id="aiThinkingPanel" class="mt-3" style="display: none;">
+                            <div class="card border-success">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">
+                                        <button class="btn btn-link text-success p-0 text-decoration-none" 
+                                                type="button" 
+                                                data-bs-toggle="collapse" 
+                                                data-bs-target="#aiThinkingContent" 
+                                                aria-expanded="true" 
+                                                aria-controls="aiThinkingContent"
+                                                id="aiThinkingToggle">
+                                            <i class="fas fa-robot me-2"></i>
+                                            <span id="aiThinkingTitle">AI正在思考...</span>
+                                            <i class="fas fa-chevron-down ms-2" id="aiThinkingChevron"></i>
+                                        </button>
+                                    </h6>
+                                </div>
+                                <div id="aiThinkingContent" class="collapse show">
+                                    <div class="card-body p-3">
+                                        <div id="aiThinkingOutput" 
+                                             class="border rounded p-3 bg-light text-dark" 
+                                             style="height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.9em; line-height: 1.4;">
+                                            <div class="text-muted">等待AI开始批改...</div>
+                                        </div>
+                                        <div class="mt-2 d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                实时显示AI思考过程
+                                            </small>
+                                            <button id="clearThinkingBtn" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-broom me-1"></i>清空输出
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -110,12 +281,34 @@
         const correctBtn = document.getElementById('correctBtn');
         const statsResults = document.getElementById('statsResults');
         const correctionResults = document.getElementById('correctionResults');
+        const aiThinkingPanel = document.getElementById('aiThinkingPanel');
+        const aiThinkingOutput = document.getElementById('aiThinkingOutput');
+        const aiThinkingTitle = document.getElementById('aiThinkingTitle');
+        const aiThinkingChevron = document.getElementById('aiThinkingChevron');
+        const clearThinkingBtn = document.getElementById('clearThinkingBtn');
 
         // 清空文本
         clearBtn.addEventListener('click', function() {
             essayText.value = '';
             showInitialMessage();
             showInitialCorrectionMessage();
+            hideAiThinkingPanel();
+        });
+
+        // 清空AI思考输出
+        clearThinkingBtn.addEventListener('click', function() {
+            clearAiThinkingOutput();
+        });
+
+        // 监听折叠状态变化
+        document.getElementById('aiThinkingContent').addEventListener('show.bs.collapse', function () {
+            aiThinkingChevron.classList.remove('fa-chevron-down');
+            aiThinkingChevron.classList.add('fa-chevron-up');
+        });
+
+        document.getElementById('aiThinkingContent').addEventListener('hide.bs.collapse', function () {
+            aiThinkingChevron.classList.remove('fa-chevron-up');
+            aiThinkingChevron.classList.add('fa-chevron-down');
         });
 
         // 分析文本
@@ -267,6 +460,151 @@
             `;
         }
 
+        function showAiThinkingPanel() {
+            aiThinkingPanel.style.display = 'block';
+            // 确保面板是展开的
+            const collapseElement = document.getElementById('aiThinkingContent');
+            if (!collapseElement.classList.contains('show')) {
+                const bsCollapse = new bootstrap.Collapse(collapseElement, { show: true });
+            }
+        }
+
+        function hideAiThinkingPanel() {
+            aiThinkingPanel.style.display = 'none';
+        }
+
+        function clearAiThinkingOutput() {
+            aiThinkingOutput.innerHTML = '<div class="text-muted">等待AI开始批改...</div>';
+            // 移除所有current-line类
+            const currentLines = aiThinkingOutput.querySelectorAll('.current-line');
+            currentLines.forEach(line => line.classList.remove('current-line'));
+        }
+
+        function appendToAiThinking(content) {
+            // 移除初始提示
+            if (aiThinkingOutput.querySelector('.text-muted')) {
+                aiThinkingOutput.innerHTML = '';
+            }
+            
+            // 获取或创建当前行元素
+            let currentLine = aiThinkingOutput.querySelector('.current-line');
+            if (!currentLine) {
+                currentLine = document.createElement('div');
+                currentLine.className = 'mb-1 current-line';
+                aiThinkingOutput.appendChild(currentLine);
+            }
+            
+            // 处理内容
+            const lines = content.split('\n');
+            
+            // 处理第一行（追加到当前行）
+            if (lines.length > 0) {
+                const firstLine = lines[0];
+                currentLine.textContent += firstLine;
+                
+                // 为特殊内容添加样式
+                if (firstLine.includes('📋 开始分析：')) {
+                    currentLine.className = 'mb-1 text-primary fw-bold';
+                } else if (firstLine.includes('完成') || firstLine.includes('成功')) {
+                    currentLine.className = 'mb-1 text-success';
+                } else if (firstLine.includes('错误') || firstLine.includes('失败')) {
+                    currentLine.className = 'mb-1 text-danger';
+                } else if (firstLine.includes('##')) {
+                    currentLine.className = 'mb-1 text-info fw-bold';
+                }
+            }
+            
+            // 处理后续行（如果有换行符）
+            for (let i = 1; i < lines.length; i++) {
+                // 完成当前行
+                currentLine.classList.remove('current-line');
+                
+                // 创建新行
+                const newLine = document.createElement('div');
+                newLine.className = 'mb-1 current-line';
+                newLine.textContent = lines[i];
+                
+                // 为特殊内容添加样式
+                if (lines[i].includes('📋 开始分析：')) {
+                    newLine.className = 'mb-1 text-primary fw-bold current-line';
+                } else if (lines[i].includes('完成') || lines[i].includes('成功')) {
+                    newLine.className = 'mb-1 text-success current-line';
+                } else if (lines[i].includes('错误') || lines[i].includes('失败')) {
+                    newLine.className = 'mb-1 text-danger current-line';
+                } else if (lines[i].includes('##')) {
+                    newLine.className = 'mb-1 text-info fw-bold current-line';
+                }
+                
+                aiThinkingOutput.appendChild(newLine);
+                currentLine = newLine;
+            }
+            
+            // 平滑滚动到底部
+            aiThinkingOutput.scrollTo({
+                top: aiThinkingOutput.scrollHeight,
+                behavior: 'smooth'
+            });
+            
+            // 如果内容太多，保持最新的100行
+            while (aiThinkingOutput.children.length > 100) {
+                aiThinkingOutput.removeChild(aiThinkingOutput.firstChild);
+            }
+        }
+
+        // 添加打字机效果的实时输出
+        function appendToAiThinkingWithTyping(content) {
+            const lines = content.split('\n');
+            let currentLineIndex = 0;
+            
+            function typeLine() {
+                if (currentLineIndex >= lines.length) return;
+                
+                const line = lines[currentLineIndex];
+                const lineElement = document.createElement('div');
+                lineElement.className = 'mb-1 fade-in';
+                lineElement.textContent = '';
+                
+                // 区分不同类型的消息
+                if (line.includes('正在分析') || line.includes('开始')) {
+                    lineElement.className += ' text-primary';
+                } else if (line.includes('完成') || line.includes('成功')) {
+                    lineElement.className += ' text-success';
+                } else if (line.includes('错误') || line.includes('失败')) {
+                    lineElement.className += ' text-danger';
+                } else if (line.includes('思考') || line.includes('处理')) {
+                    lineElement.className += ' text-info';
+                }
+                
+                aiThinkingOutput.appendChild(lineElement);
+                
+                // 打字机效果
+                let charIndex = 0;
+                const typingInterval = setInterval(() => {
+                    if (charIndex < line.length) {
+                        lineElement.textContent += line[charIndex];
+                        charIndex++;
+                    } else {
+                        clearInterval(typingInterval);
+                        currentLineIndex++;
+                        setTimeout(typeLine, 100); // 短暂停顿后继续下一行
+                    }
+                }, 50); // 50ms per character
+                
+                // 滚动到底部
+                aiThinkingOutput.scrollTo({
+                    top: aiThinkingOutput.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
+            
+            // 移除初始提示
+            if (aiThinkingOutput.querySelector('.text-muted')) {
+                aiThinkingOutput.innerHTML = '';
+            }
+            
+            typeLine();
+        }
+
         function correctEssay(text) {
             // 显示加载状态
             correctionResults.innerHTML = `
@@ -279,7 +617,82 @@
                 </div>
             `;
 
-            // 发送请求到后端API
+            // 显示AI思考面板
+            showAiThinkingPanel();
+            clearAiThinkingOutput();
+            aiThinkingTitle.textContent = 'AI正在思考...';
+
+            // 使用fetch流式输出
+            fetch('/api/correct-essay-stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                function readStream() {
+                    return reader.read().then(({ done, value }) => {
+                        if (done) {
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split('\n');
+                        
+                        lines.forEach(line => {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.substring(6));
+                                    
+                                    if (data.type === 'thinking') {
+                                        // 显示AI思考过程
+                                        appendToAiThinking(data.content);
+                                    } else if (data.type === 'result') {
+                                        // 显示最终结果
+                                        aiThinkingTitle.textContent = 'AI批改完成';
+                                        displayCorrectionResults(data.corrections);
+                                        return;
+                                    } else if (data.type === 'error') {
+                                        // 显示错误
+                                        aiThinkingTitle.textContent = 'AI批改失败';
+                                        correctionResults.innerHTML = `
+                                            <div class="alert alert-danger">
+                                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                                批改失败：${data.error || '未知错误'}
+                                            </div>
+                                        `;
+                                        return;
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing JSON:', e);
+                                }
+                            }
+                        });
+                        
+                        return readStream();
+                    });
+                }
+                
+                return readStream();
+            })
+            .catch(error => {
+                console.error('Stream error:', error);
+                aiThinkingTitle.textContent = 'AI批改失败';
+                // 如果流式输出失败，尝试普通请求
+                fallbackCorrectEssay(text);
+            });
+        }
+
+        function fallbackCorrectEssay(text) {
+            // 普通请求作为备用方案
             fetch('/api/correct-essay', {
                 method: 'POST',
                 headers: {
@@ -290,8 +703,15 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    aiThinkingTitle.textContent = 'AI批改完成';
                     displayCorrectionResults(data.corrections);
+                    
+                    // 显示AI原始响应
+                    if (data.raw_response) {
+                        appendToAiThinking('AI批改结果：\n' + data.raw_response);
+                    }
                 } else {
+                    aiThinkingTitle.textContent = 'AI批改失败';
                     correctionResults.innerHTML = `
                         <div class="alert alert-danger">
                             <i class="fas fa-exclamation-triangle me-2"></i>
@@ -302,6 +722,7 @@
             })
             .catch(error => {
                 console.error('Error:', error);
+                aiThinkingTitle.textContent = 'AI批改失败';
                 correctionResults.innerHTML = `
                     <div class="alert alert-danger">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -312,6 +733,10 @@
         }
 
         function displayCorrectionResults(corrections) {
+            // 移除当前行的光标效果
+            const currentLines = aiThinkingOutput.querySelectorAll('.current-line');
+            currentLines.forEach(line => line.classList.remove('current-line'));
+            
             if (!corrections || corrections.length === 0) {
                 correctionResults.innerHTML = `
                     <div class="alert alert-success">

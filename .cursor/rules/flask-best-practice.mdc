@@ -35,3 +35,7 @@ alwaysApply: false
 - Implement proper pagination
 - Use background tasks for heavy operations
 - Monitor application performance
+
+## Development and Test
+
+- Start Web app on port 5005 to avoid conflict when you need to run tests

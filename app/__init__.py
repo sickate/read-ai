@@ -1,8 +1,9 @@
-from flask import Flask, render_template, url_for, request, jsonify, send_file
+from flask import Flask, render_template, url_for, request, jsonify, send_file, Response
 import os
+import json
 from app.llm.volcano_audio import get_or_generate_subtitle
 import requests
-from utils.text_helper import analyze_text, ai_correct_essay
+from utils.text_helper import analyze_text, ai_correct_essay, ai_correct_essay_stream
 from app.game_24 import game_24
 
 app = Flask(__name__)
@@ -262,6 +263,73 @@ def api_correct_essay():
         result = ai_correct_essay(text)
         
         return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"服务器错误：{str(e)}"
+        }), 500
+
+
+@app.route('/api/correct-essay-stream', methods=['POST'])
+def api_correct_essay_stream():
+    """
+    AI批改作文的流式API接口
+    使用fetch stream来实现实时输出
+    """
+    try:
+        data = request.json
+        if not data or 'text' not in data:
+            return jsonify({
+                "success": False,
+                "error": "缺少text参数"
+            }), 400
+        
+        text = data['text']
+        if not text.strip():
+            return jsonify({
+                "success": False,
+                "error": "作文内容不能为空"
+            }), 400
+        
+        # 检查文本长度，避免过短的文本
+        if len(text.strip()) < 50:
+            return jsonify({
+                "success": False,
+                "error": "作文内容过短，请输入至少50个字符的作文"
+            }), 400
+        
+        # 使用生成器函数来实现流式输出
+        def generate_stream():
+            try:
+                # 发送开始信号
+                yield f"data: {json.dumps({'type': 'thinking', 'content': '开始分析作文内容...'})}\n\n"
+                
+                # 使用流式方式调用AI
+                result = ai_correct_essay_stream(text)
+                
+                for chunk in result:
+                    if chunk['type'] == 'thinking':
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    elif chunk['type'] == 'result':
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                        break
+                    elif chunk['type'] == 'error':
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                        break
+                        
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        
+        return Response(
+            generate_stream(),
+            mimetype='text/plain',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Content-Type': 'text/plain; charset=utf-8'
+            }
+        )
         
     except Exception as e:
         return jsonify({
