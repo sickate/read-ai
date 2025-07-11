@@ -169,6 +169,27 @@
             .card-header h5, .card-header h6 {
                 font-size: 1rem;
             }
+            
+            /* 修复移动端AI批改结果显示 */
+            #correctionResults .accordion-button {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+            
+            #correctionResults .accordion-body {
+                padding: 0.75rem;
+                font-size: 0.85rem;
+            }
+            
+            #correctionResults .alert {
+                padding: 0.5rem;
+                margin-bottom: 0.75rem;
+            }
+            
+            /* 确保在移动设备上accordion能正常工作 */
+            .accordion-collapse {
+                transition: height 0.3s ease;
+            }
         }
     </style>
 </head>
@@ -409,6 +430,17 @@
             }
             correctEssay(text);
         });
+
+        // 检测设备和浏览器类型
+        function isMobileSafari() {
+            const ua = navigator.userAgent;
+            return /iPad|iPhone|iPod/.test(ua) && /Safari/.test(ua) && !/Chrome/.test(ua);
+        }
+
+        // 检测是否支持流式处理
+        function supportsStreamProcessing() {
+            return 'ReadableStream' in window && 'TextDecoder' in window;
+        }
 
         // 实时输入时自动分析（可选功能）
         let debounceTimer;
@@ -707,7 +739,29 @@
             clearAiThinkingOutput();
             aiThinkingTitle.textContent = 'AI正在思考...';
 
-            // 使用fetch流式输出
+            // 移动端Safari特殊处理：直接使用非流式请求
+            if (isMobileSafari() || !supportsStreamProcessing()) {
+                console.log('Using fallback for mobile Safari or unsupported browser');
+                appendToAiThinking('检测到移动设备，使用稳定批改模式...\n');
+                fallbackCorrectEssay(text);
+                return;
+            }
+
+            // 使用fetch流式输出，增加错误处理和兼容性
+            let streamFinished = false;
+            let dataBuffer = ''; // 数据缓冲区，处理不完整的数据
+            let timeoutId = null; // 超时处理
+            
+            // 设置超时保护（60秒）
+            timeoutId = setTimeout(() => {
+                if (!streamFinished) {
+                    console.log('Stream timeout, falling back to regular request');
+                    streamFinished = true;
+                    appendToAiThinking('\n⏰ 流式处理超时，切换到普通模式...\n');
+                    fallbackCorrectEssay(text);
+                }
+            }, 60000);
+            
             fetch('/api/correct-essay-stream', {
                 method: 'POST',
                 headers: {
@@ -729,44 +783,107 @@
                 
                 function readStream() {
                     return reader.read().then(({ done, value }) => {
-                        if (done) {
+                        if (done || streamFinished) {
+                            // 处理剩余缓冲区数据
+                            if (dataBuffer.trim()) {
+                                processBufferedData(dataBuffer);
+                            }
                             return;
                         }
                         
                         const chunk = decoder.decode(value, { stream: true });
-                        const lines = chunk.split('\n');
+                        dataBuffer += chunk;
+                        
+                        // 处理完整的行
+                        const lines = dataBuffer.split('\n');
+                        dataBuffer = lines.pop() || ''; // 保留最后一行（可能不完整）
                         
                         lines.forEach(line => {
-                            if (line.startsWith('data: ')) {
+                            if (line.trim() && line.startsWith('data: ')) {
                                 try {
-                                    const data = JSON.parse(line.substring(6));
-                                    
-                                    if (data.type === 'thinking') {
-                                        // 显示AI思考过程
-                                        appendToAiThinking(data.content);
-                                    } else if (data.type === 'result') {
-                                        // 显示最终结果
-                                        aiThinkingTitle.textContent = 'AI批改完成';
-                                        displayCorrectionResults(data.corrections);
-                                        return;
-                                    } else if (data.type === 'error') {
-                                        // 显示错误
-                                        aiThinkingTitle.textContent = 'AI批改失败';
-                                        correctionResults.innerHTML = `
-                                            <div class="alert alert-danger">
-                                                <i class="fas fa-exclamation-triangle me-2"></i>
-                                                批改失败：${data.error || '未知错误'}
-                                            </div>
-                                        `;
-                                        return;
+                                    const jsonStr = line.substring(6).trim();
+                                    if (jsonStr) {
+                                        const data = JSON.parse(jsonStr);
+                                        
+                                        if (data.type === 'thinking') {
+                                            // 显示AI思考过程
+                                            appendToAiThinking(data.content);
+                                        } else if (data.type === 'result') {
+                                            // 显示最终结果
+                                            streamFinished = true;
+                                            if (timeoutId) {
+                                                clearTimeout(timeoutId);
+                                                timeoutId = null;
+                                            }
+                                            aiThinkingTitle.textContent = 'AI批改完成';
+                                            displayCorrectionResults(data.corrections);
+                                            // 关闭读取器
+                                            reader.cancel();
+                                            return;
+                                        } else if (data.type === 'error') {
+                                            // 显示错误
+                                            streamFinished = true;
+                                            if (timeoutId) {
+                                                clearTimeout(timeoutId);
+                                                timeoutId = null;
+                                            }
+                                            aiThinkingTitle.textContent = 'AI批改失败';
+                                            correctionResults.innerHTML = `
+                                                <div class="alert alert-danger">
+                                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                                    批改失败：${data.error || '未知错误'}
+                                                </div>
+                                            `;
+                                            reader.cancel();
+                                            return;
+                                        }
                                     }
                                 } catch (e) {
-                                    console.error('Error parsing JSON:', e);
+                                    console.error('Error parsing JSON:', e, 'Raw line:', line);
+                                    // 对于解析错误，我们不中断整个流程，只记录错误
                                 }
                             }
                         });
                         
-                        return readStream();
+                        // 继续读取下一个chunk（如果流没有结束）
+                        if (!streamFinished) {
+                            return readStream();
+                        }
+                    }).catch(error => {
+                        console.error('Stream read error:', error);
+                        if (!streamFinished) {
+                            streamFinished = true;
+                            if (timeoutId) {
+                                clearTimeout(timeoutId);
+                                timeoutId = null;
+                            }
+                            fallbackCorrectEssay(text);
+                        }
+                    });
+                }
+                
+                // 处理缓冲区中剩余的数据
+                function processBufferedData(buffer) {
+                    const lines = buffer.split('\n');
+                    lines.forEach(line => {
+                        if (line.trim() && line.startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.substring(6).trim();
+                                if (jsonStr) {
+                                    const data = JSON.parse(jsonStr);
+                                    if (data.type === 'result') {
+                                        if (timeoutId) {
+                                            clearTimeout(timeoutId);
+                                            timeoutId = null;
+                                        }
+                                        aiThinkingTitle.textContent = 'AI批改完成';
+                                        displayCorrectionResults(data.corrections);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Error parsing buffered JSON:', e);
+                            }
+                        }
                     });
                 }
                 
@@ -774,9 +891,16 @@
             })
             .catch(error => {
                 console.error('Stream error:', error);
-                aiThinkingTitle.textContent = 'AI批改失败';
-                // 如果流式输出失败，尝试普通请求
-                fallbackCorrectEssay(text);
+                if (!streamFinished) {
+                    streamFinished = true;
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                        timeoutId = null;
+                    }
+                    aiThinkingTitle.textContent = 'AI批改失败';
+                    // 如果流式输出失败，尝试普通请求
+                    fallbackCorrectEssay(text);
+                }
             });
         }
 
@@ -784,6 +908,10 @@
             // 获取选择器的值
             const wordCount = wordCountSelect.value;
             const grade = gradeSelect.value;
+            
+            // 模拟AI思考过程
+            appendToAiThinking('开始连接AI服务...\n');
+            appendToAiThinking('正在分析作文内容...\n');
             
             // 普通请求作为备用方案
             fetch('/api/correct-essay', {
@@ -797,18 +925,25 @@
                     grade: grade
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
+                    appendToAiThinking('AI分析完成，正在整理批改结果...\n');
                     aiThinkingTitle.textContent = 'AI批改完成';
                     displayCorrectionResults(data.corrections);
                     
-                    // 显示AI原始响应
-                    if (data.raw_response) {
-                        appendToAiThinking('AI批改结果：\n' + data.raw_response);
+                    // 显示AI原始响应（仅在开发模式下）
+                    if (data.raw_response && window.location.hostname === 'localhost') {
+                        appendToAiThinking('\n--- AI原始响应 ---\n' + data.raw_response);
                     }
                 } else {
                     aiThinkingTitle.textContent = 'AI批改失败';
+                    appendToAiThinking('❌ 批改失败：' + (data.error || '未知错误') + '\n');
                     correctionResults.innerHTML = `
                         <div class="alert alert-danger">
                             <i class="fas fa-exclamation-triangle me-2"></i>
@@ -818,21 +953,30 @@
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
+                console.error('Fallback request error:', error);
                 aiThinkingTitle.textContent = 'AI批改失败';
+                appendToAiThinking('❌ 网络错误：' + error.message + '\n');
                 correctionResults.innerHTML = `
                     <div class="alert alert-danger">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        网络错误，请稍后重试
+                        网络错误，请检查网络连接后重试
                     </div>
                 `;
             });
         }
 
         function displayCorrectionResults(corrections) {
+            console.log('displayCorrectionResults called with:', corrections);
+            
             // 移除当前行的光标效果
             const currentLines = aiThinkingOutput.querySelectorAll('.current-line');
             currentLines.forEach(line => line.classList.remove('current-line'));
+            
+            // 确保correctionResults元素存在
+            if (!correctionResults) {
+                console.error('correctionResults element not found');
+                return;
+            }
             
             if (!corrections || corrections.length === 0) {
                 correctionResults.innerHTML = `
@@ -847,6 +991,11 @@
             let html = '<div class="accordion" id="correctionAccordion">';
             
             corrections.forEach((section, index) => {
+                if (!section || !section.type || !section.items) {
+                    console.warn('Invalid section:', section);
+                    return;
+                }
+                
                 const sectionId = `section${index}`;
                 const iconMap = {
                     '总体评价': 'fas fa-star text-success',
@@ -876,8 +1025,12 @@
                                 <ul class="list-unstyled mb-0">
                 `;
                 
-                section.items.forEach(item => {
-                    html += `<li class="mb-2"><i class="fas fa-angle-right me-2 text-muted"></i>${item}</li>`;
+                section.items.forEach((item, itemIndex) => {
+                    if (typeof item === 'string') {
+                        html += `<li class="mb-2"><i class="fas fa-angle-right me-2 text-muted"></i>${item}</li>`;
+                    } else {
+                        console.warn('Invalid item at index', itemIndex, ':', item);
+                    }
                 });
                 
                 html += `
@@ -891,7 +1044,10 @@
             html += '</div>';
             
             // 添加总结信息
-            const totalIssues = corrections.reduce((sum, section) => sum + section.items.length, 0);
+            const totalIssues = corrections.reduce((sum, section) => {
+                return sum + (section.items ? section.items.length : 0);
+            }, 0);
+            
             html = `
                 <div class="alert alert-warning mb-3">
                     <i class="fas fa-info-circle me-2"></i>
@@ -899,7 +1055,13 @@
                 </div>
             ` + html;
             
+            // 设置结果内容
             correctionResults.innerHTML = html;
+            
+            // 添加完成提示到AI思考输出
+            appendToAiThinking(`\n✅ 批改结果已显示，共发现 ${totalIssues} 处需要改进的地方。\n`);
+            
+            console.log('Correction results displayed successfully');
         }
     </script>
 </body>
