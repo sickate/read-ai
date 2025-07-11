@@ -383,6 +383,40 @@
         const wordCountSelect = document.getElementById('wordCountSelect');
         const gradeSelect = document.getElementById('gradeSelect');
 
+        // 验证关键元素是否存在
+        console.log('DOM Elements verification:');
+        console.log('essayText:', essayText);
+        console.log('correctionResults:', correctionResults);
+        console.log('aiThinkingOutput:', aiThinkingOutput);
+        console.log('wordCountSelect:', wordCountSelect);
+        console.log('gradeSelect:', gradeSelect);
+        
+        // 如果关键元素缺失，显示错误信息
+        if (!correctionResults) {
+            console.error('Critical: correctionResults element not found!');
+            alert('页面加载异常，correctionResults元素未找到，请刷新页面');
+        }
+        
+        if (!aiThinkingOutput) {
+            console.error('Critical: aiThinkingOutput element not found!');
+        }
+        
+        // 全局错误处理
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            if (e.error && e.error.message && e.error.message.includes('JSON')) {
+                console.warn('JSON parsing error detected, this is handled gracefully');
+            }
+        });
+        
+        // 添加页面可见性变化监听（针对移动端背景切换问题）
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && isMobileSafari()) {
+                // 页面重新可见时，检查是否有未完成的批改任务
+                console.log('Page became visible on mobile Safari');
+            }
+        });
+
         // 清空文本
         clearBtn.addEventListener('click', function() {
             essayText.value = '';
@@ -434,12 +468,54 @@
         // 检测设备和浏览器类型
         function isMobileSafari() {
             const ua = navigator.userAgent;
-            return /iPad|iPhone|iPod/.test(ua) && /Safari/.test(ua) && !/Chrome/.test(ua);
+            const isIOS = /iPad|iPhone|iPod/.test(ua);
+            const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua) && !/CriOS/.test(ua) && !/FxiOS/.test(ua);
+            const isIPadOS = /Macintosh/.test(ua) && 'ontouchend' in document; // iPadOS 13+ 检测
+            
+            console.log('Device detection - UA:', ua);
+            console.log('Device detection - isIOS:', isIOS, 'isSafari:', isSafari, 'isIPadOS:', isIPadOS);
+            
+            return (isIOS || isIPadOS) && isSafari;
         }
 
         // 检测是否支持流式处理
         function supportsStreamProcessing() {
-            return 'ReadableStream' in window && 'TextDecoder' in window;
+            const hasReadableStream = 'ReadableStream' in window;
+            const hasTextDecoder = 'TextDecoder' in window;
+            const hasAsyncIterator = 'Symbol' in window && 'asyncIterator' in Symbol;
+            
+            console.log('Stream support - ReadableStream:', hasReadableStream, 'TextDecoder:', hasTextDecoder, 'AsyncIterator:', hasAsyncIterator);
+            
+            return hasReadableStream && hasTextDecoder;
+        }
+
+        // 安全的JSON解析函数
+        function safeJSONParse(jsonStr) {
+            try {
+                // 先进行基本的JSON格式检查
+                if (!jsonStr || typeof jsonStr !== 'string') {
+                    return null;
+                }
+                
+                // 清理可能的非JSON字符
+                const cleanStr = jsonStr.trim();
+                if (!cleanStr.startsWith('{') || !cleanStr.endsWith('}')) {
+                    return null;
+                }
+                
+                // 检查括号平衡
+                const openBraces = (cleanStr.match(/\{/g) || []).length;
+                const closeBraces = (cleanStr.match(/\}/g) || []).length;
+                if (openBraces !== closeBraces) {
+                    console.warn('Unbalanced JSON braces:', cleanStr);
+                    return null;
+                }
+                
+                return JSON.parse(cleanStr);
+            } catch (e) {
+                console.error('JSON parse error:', e.message, 'String:', jsonStr);
+                return null;
+            }
         }
 
         // 实时输入时自动分析（可选功能）
@@ -740,10 +816,15 @@
             aiThinkingTitle.textContent = 'AI正在思考...';
 
             // 移动端Safari特殊处理：直接使用非流式请求
-            if (isMobileSafari() || !supportsStreamProcessing()) {
+            const shouldUseFallback = isMobileSafari() || !supportsStreamProcessing();
+            console.log('Device check - shouldUseFallback:', shouldUseFallback);
+            
+            if (shouldUseFallback) {
                 console.log('Using fallback for mobile Safari or unsupported browser');
-                appendToAiThinking('检测到移动设备，使用稳定批改模式...\n');
-                fallbackCorrectEssay(text);
+                appendToAiThinking('检测到移动设备或不支持流式处理，使用稳定批改模式...\n');
+                setTimeout(() => {
+                    fallbackCorrectEssay(text);
+                }, 100); // 小延迟确保UI更新
                 return;
             }
 
@@ -800,11 +881,11 @@
                         
                         lines.forEach(line => {
                             if (line.trim() && line.startsWith('data: ')) {
-                                try {
-                                    const jsonStr = line.substring(6).trim();
-                                    if (jsonStr) {
-                                        const data = JSON.parse(jsonStr);
-                                        
+                                const jsonStr = line.substring(6).trim();
+                                if (jsonStr) {
+                                    const data = safeJSONParse(jsonStr);
+                                    
+                                    if (data) {
                                         if (data.type === 'thinking') {
                                             // 显示AI思考过程
                                             appendToAiThinking(data.content);
@@ -837,10 +918,10 @@
                                             reader.cancel();
                                             return;
                                         }
+                                    } else {
+                                        // 无效的JSON数据，记录但不中断流程
+                                        console.warn('Invalid JSON data received:', line);
                                     }
-                                } catch (e) {
-                                    console.error('Error parsing JSON:', e, 'Raw line:', line);
-                                    // 对于解析错误，我们不中断整个流程，只记录错误
                                 }
                             }
                         });
@@ -864,24 +945,27 @@
                 
                 // 处理缓冲区中剩余的数据
                 function processBufferedData(buffer) {
+                    console.log('Processing buffered data:', buffer);
                     const lines = buffer.split('\n');
                     lines.forEach(line => {
                         if (line.trim() && line.startsWith('data: ')) {
-                            try {
-                                const jsonStr = line.substring(6).trim();
-                                if (jsonStr) {
-                                    const data = JSON.parse(jsonStr);
-                                    if (data.type === 'result') {
-                                        if (timeoutId) {
-                                            clearTimeout(timeoutId);
-                                            timeoutId = null;
-                                        }
-                                        aiThinkingTitle.textContent = 'AI批改完成';
-                                        displayCorrectionResults(data.corrections);
+                            const jsonStr = line.substring(6).trim();
+                            if (jsonStr) {
+                                const data = safeJSONParse(jsonStr);
+                                if (data && data.type === 'result') {
+                                    if (timeoutId) {
+                                        clearTimeout(timeoutId);
+                                        timeoutId = null;
                                     }
+                                    streamFinished = true;
+                                    aiThinkingTitle.textContent = 'AI批改完成';
+                                    displayCorrectionResults(data.corrections);
+                                } else if (data && data.type === 'thinking') {
+                                    // 处理思考过程数据
+                                    appendToAiThinking(data.content);
+                                } else {
+                                    console.warn('Invalid buffered JSON data:', line);
                                 }
-                            } catch (e) {
-                                console.error('Error parsing buffered JSON:', e);
                             }
                         }
                     });
@@ -905,13 +989,22 @@
         }
 
         function fallbackCorrectEssay(text) {
+            console.log('fallbackCorrectEssay called');
+            
             // 获取选择器的值
             const wordCount = wordCountSelect.value;
             const grade = gradeSelect.value;
             
             // 模拟AI思考过程
-            appendToAiThinking('开始连接AI服务...\n');
-            appendToAiThinking('正在分析作文内容...\n');
+            appendToAiThinking('🔄 开始连接AI服务...\n');
+            
+            setTimeout(() => {
+                appendToAiThinking('📋 正在分析作文内容...\n');
+            }, 500);
+            
+            setTimeout(() => {
+                appendToAiThinking('🤖 AI正在思考批改方案...\n');
+            }, 1000);
             
             // 普通请求作为备用方案
             fetch('/api/correct-essay', {
@@ -926,21 +1019,36 @@
                 })
             })
             .then(response => {
+                console.log('Fallback response status:', response.status);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 return response.json();
             })
             .then(data => {
+                console.log('Fallback response data:', data);
+                
                 if (data.success) {
-                    appendToAiThinking('AI分析完成，正在整理批改结果...\n');
-                    aiThinkingTitle.textContent = 'AI批改完成';
-                    displayCorrectionResults(data.corrections);
+                    appendToAiThinking('✅ AI分析完成，正在整理批改结果...\n');
                     
-                    // 显示AI原始响应（仅在开发模式下）
-                    if (data.raw_response && window.location.hostname === 'localhost') {
-                        appendToAiThinking('\n--- AI原始响应 ---\n' + data.raw_response);
-                    }
+                    // 确保在下一个事件循环中执行，让思考过程显示完成
+                    setTimeout(() => {
+                        aiThinkingTitle.textContent = 'AI批改完成';
+                        
+                        // 强制确保correctionResults存在
+                        if (!correctionResults) {
+                            console.error('correctionResults element not found in DOM');
+                            return;
+                        }
+                        
+                        console.log('About to call displayCorrectionResults with:', data.corrections);
+                        displayCorrectionResults(data.corrections);
+                        
+                        // 显示AI原始响应（仅在开发模式下）
+                        if (data.raw_response && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+                            appendToAiThinking('\n--- AI原始响应 ---\n' + data.raw_response);
+                        }
+                    }, 500);
                 } else {
                     aiThinkingTitle.textContent = 'AI批改失败';
                     appendToAiThinking('❌ 批改失败：' + (data.error || '未知错误') + '\n');
@@ -967,26 +1075,55 @@
 
         function displayCorrectionResults(corrections) {
             console.log('displayCorrectionResults called with:', corrections);
+            console.log('correctionResults element:', correctionResults);
             
             // 移除当前行的光标效果
             const currentLines = aiThinkingOutput.querySelectorAll('.current-line');
             currentLines.forEach(line => line.classList.remove('current-line'));
             
-            // 确保correctionResults元素存在
+            // 强制确保correctionResults元素存在
             if (!correctionResults) {
-                console.error('correctionResults element not found');
-                return;
+                console.error('correctionResults element not found in DOM');
+                // 尝试重新获取元素
+                const element = document.getElementById('correctionResults');
+                if (element) {
+                    console.log('Found correctionResults by getElementById');
+                    // 更新全局变量
+                    window.correctionResults = element;
+                } else {
+                    console.error('correctionResults element still not found');
+                    alert('界面错误：找不到批改结果显示区域，请刷新页面重试');
+                    return;
+                }
             }
             
-            if (!corrections || corrections.length === 0) {
-                correctionResults.innerHTML = `
-                    <div class="alert alert-success">
-                        <i class="fas fa-check-circle me-2"></i>
-                        <strong>恭喜！</strong>您的作文暂未发现明显问题。
+            // 添加加载提示，确保用户知道结果正在显示
+            correctionResults.innerHTML = `
+                <div class="text-center p-3">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">正在显示结果...</span>
                     </div>
-                `;
-                return;
-            }
+                    <p class="mt-2 text-muted">正在整理批改结果...</p>
+                </div>
+            `;
+            
+            // 延迟显示结果，确保UI有时间更新
+            setTimeout(() => {
+                if (!corrections || corrections.length === 0) {
+                    correctionResults.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>恭喜！</strong>您的作文暂未发现明显问题。
+                        </div>
+                    `;
+                    return;
+                }
+                
+                displayActualResults(corrections);
+            }, 300);
+        }
+
+        function displayActualResults(corrections) {
 
             let html = '<div class="accordion" id="correctionAccordion">';
             
@@ -1058,10 +1195,35 @@
             // 设置结果内容
             correctionResults.innerHTML = html;
             
+            // 强制刷新显示（特别针对iPad Safari）
+            if (isMobileSafari()) {
+                // 强制重新渲染
+                correctionResults.style.display = 'none';
+                setTimeout(() => {
+                    correctionResults.style.display = 'block';
+                    
+                    // 滚动到结果区域
+                    correctionResults.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'start' 
+                    });
+                }, 50);
+            }
+            
             // 添加完成提示到AI思考输出
             appendToAiThinking(`\n✅ 批改结果已显示，共发现 ${totalIssues} 处需要改进的地方。\n`);
             
             console.log('Correction results displayed successfully');
+            
+            // 设置一个验证机制，确保结果确实显示了
+            setTimeout(() => {
+                const resultContent = correctionResults.querySelector('.accordion');
+                if (!resultContent) {
+                    console.warn('Results may not have displayed properly, attempting recovery');
+                    // 再次尝试显示
+                    correctionResults.innerHTML = html;
+                }
+            }, 1000);
         }
     </script>
 </body>
