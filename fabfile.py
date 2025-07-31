@@ -30,7 +30,7 @@ address = '127.0.0.1'
 port = 5000
 log_level = 'debug'
 # 🔧 AI批改功能需要更长的超时时间
-timeout = 120  # 增加到120秒以支持AI请求
+timeout = 180  # 增加到180秒以支持增强的流式AI请求
 keepalive = 10
 max_requests = 1000
 max_requests_jitter = 50
@@ -61,12 +61,18 @@ def setup(ctx):
 
 @task(pre=[setup_connection])
 def start_app(ctx):
+    """
+    启动应用服务器
+    修复：使用setsid、disown和完全IO重定向来彻底分离gunicorn进程，
+    防止SSH会话一直等待后台进程完成而导致的超时问题
+    """
     if remote_host == 'maru':
         logger.info('Kill existing apps...')
         ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && kill $(pgrep -a gunicorn | awk '{{print $1}}') || true")
         logger.info('Spawning new apps...')
         # 🔧 修复：添加AI批改所需的超时和流式输出配置
-        ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && nohup gunicorn app:app -w {worker_num} -b {address}:{port} --timeout {timeout} --keep-alive {keepalive} --max-requests {max_requests} --max-requests-jitter {max_requests_jitter} --log-level {log_level} > log/{app_name}.log 2> log/{app_name}.err &")
+        # 使用setsid和完全的IO重定向来彻底分离进程
+        ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && setsid nohup gunicorn app:app -w {worker_num} -b {address}:{port} --timeout {timeout} --keep-alive {keepalive} --max-requests {max_requests} --max-requests-jitter {max_requests_jitter} --log-level {log_level} < /dev/null > log/{app_name}.log 2> log/{app_name}.err & disown", pty=False)
         logger.info("Server started.")
     else:
         activate_cmd = f'source ~/.virtualenvs/{app_name}/bin/activate'
@@ -75,7 +81,8 @@ def start_app(ctx):
             ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && kill $(pgrep -a gunicorn | awk '{{print $1}}') || true")
             logger.info('Spawning new apps...')
             # 🔧 修复：添加AI批改所需的超时和流式输出配置
-            ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && nohup gunicorn app:app -w {worker_num} -b {address}:{port} --timeout {timeout} --keep-alive {keepalive} --max-requests {max_requests} --max-requests-jitter {max_requests_jitter} --log-level {log_level} > log/{app_name}.log 2> log/{app_name}.err &")
+            # 使用setsid和完全的IO重定向来彻底分离进程
+            ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && setsid nohup gunicorn app:app -w {worker_num} -b {address}:{port} --timeout {timeout} --keep-alive {keepalive} --max-requests {max_requests} --max-requests-jitter {max_requests_jitter} --log-level {log_level} < /dev/null > log/{app_name}.log 2> log/{app_name}.err & disown", pty=False)
 
             logger.info("Server started.")
 
