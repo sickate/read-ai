@@ -279,7 +279,7 @@ def api_correct_essay():
 def api_correct_essay_stream():
     """
     AI批改作文的流式API接口
-    使用fetch stream来实现实时输出
+    使用fetch stream来实现实时输出，增加了更好的错误处理和超时管理
     """
     try:
         data = request.json
@@ -305,6 +305,7 @@ def api_correct_essay_stream():
         
         # 使用生成器函数来实现流式输出
         def generate_stream():
+            import time
             try:
                 # 发送开始信号
                 yield f"data: {json.dumps({'type': 'thinking', 'content': '开始分析作文内容...'})}\n\n"
@@ -313,12 +314,24 @@ def api_correct_essay_stream():
                 word_count = data.get('word_count', '不限字数')
                 grade = data.get('grade', '三年级')
                 
+                # 添加心跳机制，防止连接超时
+                last_heartbeat = time.time()
+                heartbeat_interval = 30  # 30秒发送一次心跳
+                
                 # 使用流式方式调用AI
                 result = ai_correct_essay_stream(text, word_count, grade)
                 
                 for chunk in result:
+                    current_time = time.time()
+                    
+                    # 发送心跳信号，防止连接超时
+                    if current_time - last_heartbeat > heartbeat_interval:
+                        yield f"data: {json.dumps({'type': 'thinking', 'content': '⏳ AI正在深度分析中...'})}\n\n"
+                        last_heartbeat = current_time
+                    
                     if chunk['type'] == 'thinking':
                         yield f"data: {json.dumps(chunk)}\n\n"
+                        last_heartbeat = current_time  # 更新心跳时间
                     elif chunk['type'] == 'result':
                         yield f"data: {json.dumps(chunk)}\n\n"
                         break
@@ -326,18 +339,33 @@ def api_correct_essay_stream():
                         yield f"data: {json.dumps(chunk)}\n\n"
                         break
                         
+            except GeneratorExit:
+                # 客户端断开连接
+                yield f"data: {json.dumps({'type': 'error', 'error': '客户端连接中断'})}\n\n"
             except Exception as e:
-                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+                error_msg = str(e)
+                if "timeout" in error_msg.lower():
+                    yield f"data: {json.dumps({'type': 'error', 'error': 'AI服务响应超时，请稍后重试'})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'error', 'error': f'处理出错：{error_msg}'})}\n\n"
         
-        return Response(
+        response = Response(
             generate_stream(),
             mimetype='text/plain',
             headers={
                 'Cache-Control': 'no-cache',
                 'Connection': 'keep-alive',
-                'Content-Type': 'text/plain; charset=utf-8'
+                'Content-Type': 'text/plain; charset=utf-8',
+                'X-Accel-Buffering': 'no',  # 禁用nginx缓冲，立即发送数据
+                'Access-Control-Allow-Origin': '*',  # 允许跨域（如果需要）
+                'Access-Control-Allow-Headers': 'Content-Type'
             }
         )
+        
+        # 设置响应超时为5分钟
+        response.timeout = 300
+        
+        return response
         
     except Exception as e:
         return jsonify({

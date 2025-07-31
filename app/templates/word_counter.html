@@ -477,16 +477,33 @@
             
             return (isIOS || isIPadOS) && isSafari;
         }
+        
+        // 检测是否为移动设备（包括Android）
+        function isMobileDevice() {
+            const ua = navigator.userAgent;
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+            const isTablet = /iPad/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            
+            return isMobile || isTablet || hasTouch;
+        }
 
         // 检测是否支持流式处理
         function supportsStreamProcessing() {
             const hasReadableStream = 'ReadableStream' in window;
             const hasTextDecoder = 'TextDecoder' in window;
             const hasAsyncIterator = 'Symbol' in window && 'asyncIterator' in Symbol;
+            const hasFetch = 'fetch' in window;
+            
+            // 检测是否为可能有流式问题的浏览器/设备
+            const ua = navigator.userAgent;
+            const isOldBrowser = /MSIE|Trident|Edge\/12|Edge\/13|Edge\/14|Edge\/15|Edge\/16/.test(ua);
+            const isProblematicMobile = isMobileSafari() && /OS 12_|OS 13_/.test(ua); // 老版本iOS Safari
             
             console.log('Stream support - ReadableStream:', hasReadableStream, 'TextDecoder:', hasTextDecoder, 'AsyncIterator:', hasAsyncIterator);
+            console.log('Stream support - hasFetch:', hasFetch, 'isOldBrowser:', isOldBrowser, 'isProblematicMobile:', isProblematicMobile);
             
-            return hasReadableStream && hasTextDecoder;
+            return hasReadableStream && hasTextDecoder && hasFetch && !isOldBrowser && !isProblematicMobile;
         }
 
         // 安全的JSON解析函数
@@ -789,6 +806,17 @@
         }
 
         function correctEssay(text) {
+            // 检查网络状态
+            if (!checkNetworkStatus()) {
+                correctionResults.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-wifi me-2"></i>
+                        网络连接不可用，请检查网络设置
+                    </div>
+                `;
+                return;
+            }
+            
             // 获取选择器的值
             const wordCount = wordCountSelect.value;
             const grade = gradeSelect.value;
@@ -815,16 +843,18 @@
             clearAiThinkingOutput();
             aiThinkingTitle.textContent = 'AI正在思考...';
 
-            // 移动端Safari特殊处理：直接使用非流式请求
-            const shouldUseFallback = isMobileSafari() || !supportsStreamProcessing();
-            console.log('Device check - shouldUseFallback:', shouldUseFallback);
+            // 智能选择处理模式：优先尝试流式，但为移动设备提供更好的降级策略
+            const preferFallback = !supportsStreamProcessing() || (isMobileDevice() && navigator.connection && navigator.connection.effectiveType && navigator.connection.effectiveType.includes('2g'));
+            const forceStream = localStorage.getItem('forceStreamMode') === 'true'; // 允许用户强制启用流式模式
             
-            if (shouldUseFallback) {
-                console.log('Using fallback for mobile Safari or unsupported browser');
-                appendToAiThinking('检测到移动设备或不支持流式处理，使用稳定批改模式...\n');
+            console.log('Device check - preferFallback:', preferFallback, 'forceStream:', forceStream);
+            
+            if (preferFallback && !forceStream) {
+                console.log('Using fallback for better mobile experience');
+                appendToAiThinking('检测到较慢的网络或移动设备，使用稳定批改模式...\n');
                 setTimeout(() => {
                     fallbackCorrectEssay(text);
-                }, 100); // 小延迟确保UI更新
+                }, 100);
                 return;
             }
 
@@ -833,15 +863,19 @@
             let dataBuffer = ''; // 数据缓冲区，处理不完整的数据
             let timeoutId = null; // 超时处理
             
-            // 设置超时保护（60秒）
+            // 动态超时设置：移动设备使用更长超时时间
+            const timeoutDuration = isMobileDevice() ? 180000 : 120000; // 移动设备3分钟，桌面设备2分钟
+            
             timeoutId = setTimeout(() => {
                 if (!streamFinished) {
-                    console.log('Stream timeout, falling back to regular request');
+                    console.log(`Stream timeout after ${timeoutDuration/1000}s, falling back to regular request`);
                     streamFinished = true;
-                    appendToAiThinking('\n⏰ 流式处理超时，切换到普通模式...\n');
+                    appendToAiThinking('\n⏰ 流式处理超时，正在切换到稳定模式...\n');
+                    // 给用户更友好的提示
+                    appendToAiThinking('💡 提示：如果经常超时，可以刷新页面后尝试直接使用稳定模式\n');
                     fallbackCorrectEssay(text);
                 }
-            }, 60000);
+            }, timeoutDuration);
             
             fetch('/api/correct-essay-stream', {
                 method: 'POST',
@@ -862,15 +896,33 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 
+                // 添加心跳检测
+                let lastActivityTime = Date.now();
+                const heartbeatInterval = setInterval(() => {
+                    if (streamFinished) {
+                        clearInterval(heartbeatInterval);
+                        return;
+                    }
+                    
+                    const timeSinceLastActivity = Date.now() - lastActivityTime;
+                    if (timeSinceLastActivity > 45000) { // 45秒无活动
+                        appendToAiThinking('⏳ 正在等待AI响应，请耐心等待...\n');
+                        lastActivityTime = Date.now(); // 重置计时器
+                    }
+                }, 30000); // 每30秒检查一次
+                
                 function readStream() {
                     return reader.read().then(({ done, value }) => {
                         if (done || streamFinished) {
+                            clearInterval(heartbeatInterval);
                             // 处理剩余缓冲区数据
                             if (dataBuffer.trim()) {
                                 processBufferedData(dataBuffer);
                             }
                             return;
                         }
+                        
+                        lastActivityTime = Date.now(); // 更新活动时间
                         
                         const chunk = decoder.decode(value, { stream: true });
                         dataBuffer += chunk;
@@ -932,12 +984,23 @@
                         }
                     }).catch(error => {
                         console.error('Stream read error:', error);
+                        clearInterval(heartbeatInterval);
                         if (!streamFinished) {
                             streamFinished = true;
                             if (timeoutId) {
                                 clearTimeout(timeoutId);
                                 timeoutId = null;
                             }
+                            
+                            // 根据错误类型提供不同的处理
+                            if (error.name === 'AbortError' || error.message.includes('aborted')) {
+                                appendToAiThinking('\n⚠️ 连接被中断，正在尝试稳定模式...\n');
+                            } else if (error.message.includes('network') || error.message.includes('fetch')) {
+                                appendToAiThinking('\n🌐 网络问题，正在尝试重新连接...\n');
+                            } else {
+                                appendToAiThinking('\n⚠️ 流式传输遇到问题，正在切换到稳定模式...\n');
+                            }
+                            
                             fallbackCorrectEssay(text);
                         }
                     });
@@ -995,29 +1058,57 @@
             const wordCount = wordCountSelect.value;
             const grade = gradeSelect.value;
             
-            // 模拟AI思考过程
-            appendToAiThinking('🔄 开始连接AI服务...\n');
+            // 模拟AI思考过程，提供更好的用户体验
+            appendToAiThinking('🔄 正在连接AI服务（稳定模式）...\n');
             
-            setTimeout(() => {
-                appendToAiThinking('📋 正在分析作文内容...\n');
-            }, 500);
+            const feedbackSteps = [
+                { delay: 500, message: '📋 正在分析作文内容...' },
+                { delay: 1500, message: '🤖 AI正在细致检查语法和拼写...' },
+                { delay: 3000, message: '🔍 正在分析文章结构和逻辑...' },
+                { delay: 5000, message: '✍️ 正在生成详细的修改建议...' }
+            ];
             
-            setTimeout(() => {
-                appendToAiThinking('🤖 AI正在思考批改方案...\n');
-            }, 1000);
+            feedbackSteps.forEach(step => {
+                setTimeout(() => {
+                    if (!aiThinkingOutput.textContent.includes('✅') && !aiThinkingOutput.textContent.includes('❌')) {
+                        appendToAiThinking(step.message + '\n');
+                    }
+                }, step.delay);
+            });
             
-            // 普通请求作为备用方案
-            fetch('/api/correct-essay', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    text: text,
-                    word_count: wordCount,
-                    grade: grade
+            // 增加重试机制的普通请求
+            const maxRetries = 2;
+            let retryCount = 0;
+            
+            function attemptFallbackRequest() {
+                return fetch('/api/correct-essay', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        text: text,
+                        word_count: wordCount,
+                        grade: grade
+                    }),
+                    timeout: 120000 // 2分钟超时
                 })
-            })
+                .catch(error => {
+                    console.error(`Attempt ${retryCount + 1} failed:`, error);
+                    retryCount++;
+                    
+                    if (retryCount < maxRetries) {
+                        appendToAiThinking(`\n⚠️ 第${retryCount}次请求失败，正在重试...\n`);
+                        return new Promise(resolve => {
+                            setTimeout(() => resolve(attemptFallbackRequest()), 2000 * retryCount); // 递增延迟
+                        });
+                    } else {
+                        throw error;
+                    }
+                });
+            }
+            
+            attemptFallbackRequest()
             .then(response => {
                 console.log('Fallback response status:', response.status);
                 if (!response.ok) {
@@ -1061,16 +1152,70 @@
                 }
             })
             .catch(error => {
-                console.error('Fallback request error:', error);
+                console.error('All fallback attempts failed:', error);
                 aiThinkingTitle.textContent = 'AI批改失败';
-                appendToAiThinking('❌ 网络错误：' + error.message + '\n');
+                
+                // 根据错误类型提供更具体的建议
+                let errorMessage = '网络错误，请检查网络连接后重试';
+                let suggestions = [];
+                
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    errorMessage = '无法连接到服务器';
+                    suggestions = ['检查网络连接是否正常', '尝试刷新页面', '稍后再试'];
+                } else if (error.message.includes('timeout')) {
+                    errorMessage = '请求超时';
+                    suggestions = ['网络较慢，请缩短作文长度', '尝试在网络状态良好时重试', '刷新页面重新开始'];
+                } else if (error.message.includes('500')) {
+                    errorMessage = '服务器内部错误';
+                    suggestions = ['服务器正在处理大量请求，请稍后再试', '尝试刷新页面'];
+                }
+                
+                appendToAiThinking(`\n❌ 批改失败：${errorMessage}\n`);
+                
+                const suggestionsHtml = suggestions.length > 0 ? 
+                    `<div class="mt-2"><small class="text-muted">
+                        建议：<br>
+                        ${suggestions.map((s, i) => `${i + 1}. ${s}`).join('<br>')}
+                    </small></div>` : '';
+                
                 correctionResults.innerHTML = `
                     <div class="alert alert-danger">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        网络错误，请检查网络连接后重试
+                        <strong>批改失败</strong><br>
+                        ${errorMessage}
+                        ${suggestionsHtml}
+                        <div class="mt-3">
+                            <button class="btn btn-outline-danger btn-sm" onclick="correctEssay(essayText.value.trim())">
+                                <i class="fas fa-redo me-1"></i>重试
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm ms-2" onclick="localStorage.setItem('forceStreamMode', 'true'); correctEssay(essayText.value.trim())">
+                                <i class="fas fa-stream me-1"></i>强制使用流式模式
+                            </button>
+                        </div>
                     </div>
                 `;
             });
+        }
+        
+        // 添加网络状态检测
+        function checkNetworkStatus() {
+            if ('navigator' in window && 'onLine' in navigator) {
+                if (!navigator.onLine) {
+                    appendToAiThinking('\n⚠️ 检测到网络断开，请检查网络连接\n');
+                    return false;
+                }
+            }
+            
+            if ('navigator' in window && 'connection' in navigator) {
+                const connection = navigator.connection;
+                if (connection && connection.effectiveType) {
+                    if (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g') {
+                        appendToAiThinking('\n🐌 检测到网络较慢，可能需要更长时间...\n');
+                    }
+                }
+            }
+            
+            return true;
         }
 
         function displayCorrectionResults(corrections) {

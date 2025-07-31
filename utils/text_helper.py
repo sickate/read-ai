@@ -2,6 +2,7 @@ import re
 from typing import Dict, Any, List
 import os
 import sys
+import time
 
 # 添加项目根目录到路径，以便导入app模块
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -141,7 +142,7 @@ def ai_correct_essay(text: str, word_count: str = "不限字数", grade: str = "
 - 总体印象：（对整篇作文的总体评价）
 - 优点：（列出作文的优点）
 - 主要问题：（列出主要需要改进的问题）
-- 建议得分：（按{grade}标准给出建议分数，满分100分）
+- 建议得分：（按{grade}标准给出建议分数，从 A+ 到 D 评分）
 
 ## 病句修改
 - 第X段第Y句："原文内容" → 问题：具体问题描述 → 建议：如何修改的建议
@@ -218,7 +219,7 @@ def ai_correct_essay_stream(text: str, word_count: str = "不限字数", grade: 
     try:
         # 获取阿里云配置
         provider = get_provider_config('aliyun')
-        client = provider.get_llm()
+        client = provider.get_llm(timeout=180)  # 增加到3分钟超时
         
         # 构建批改提示词
         grade_requirements = {
@@ -278,52 +279,89 @@ def ai_correct_essay_stream(text: str, word_count: str = "不限字数", grade: 
             "content": "正在连接AI模型..."
         }
         
-        # 使用流式输出调用AI模型
-        stream = client.chat.completions.create(
-            model=AliyunModel.DEEPSEEK_R1.value,
-            messages=[
-                {"role": "system", "content": "你是一名专业的语文老师，负责批改学生作文。"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=2000,
-            stream=True
-        )
+        # 使用流式输出调用AI模型，增加错误重试机制
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                stream = client.chat.completions.create(
+                    model=AliyunModel.DEEPSEEK_R1.value,
+                    messages=[
+                        {"role": "system", "content": "你是一名专业的语文老师，负责批改学生作文。"},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=3000,  # 增加token限制
+                    stream=True,
+                    timeout=180  # 3分钟超时
+                )
+                break  # 成功创建，退出重试循环
+            except Exception as e:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    raise e
+                yield {
+                    "type": "thinking",
+                    "content": f"连接超时，正在重试 ({retry_count}/{max_retries})..."
+                }
+                time.sleep(2)  # 等待2秒后重试
         
         yield {
             "type": "thinking",
             "content": "AI开始思考批改方案..."
         }
         
-        # 收集流式响应
+        # 收集流式响应，增加超时和心跳检测
         full_response = ""
         current_line = ""
+        last_chunk_time = time.time()
+        chunk_timeout = 30  # 30秒内没有新chunk则认为超时
         
-        for chunk in stream:
-            if chunk.choices[0].delta.content is not None:
-                content = chunk.choices[0].delta.content
-                full_response += content
-                current_line += content
+        try:
+            for chunk in stream:
+                current_time = time.time()
                 
-                # 实时显示AI的思考内容
-                if content:
+                # 检查chunk超时
+                if current_time - last_chunk_time > chunk_timeout:
                     yield {
                         "type": "thinking",
-                        "content": content
+                        "content": "⚠️ 数据传输缓慢，正在等待AI响应..."
                     }
                 
-                # 当遇到换行符时，检查是否是完整的段落标题
-                if "\n" in current_line:
-                    lines = current_line.split("\n")
-                    for line in lines[:-1]:  # 处理除最后一行外的所有行
-                        if line.strip().startswith("##"):
-                            section_name = line.strip().replace("##", "").strip()
-                            if section_name:
-                                yield {
-                                    "type": "thinking",
-                                    "content": f"\n📋 开始分析：{section_name}\n"
-                                }
-                    current_line = lines[-1]  # 保留最后一行继续处理
+                last_chunk_time = current_time
+                
+                if chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    current_line += content
+                    
+                    # 实时显示AI的思考内容
+                    if content:
+                        yield {
+                            "type": "thinking",
+                            "content": content
+                        }
+                    
+                    # 当遇到换行符时，检查是否是完整的段落标题
+                    if "\n" in current_line:
+                        lines = current_line.split("\n")
+                        for line in lines[:-1]:  # 处理除最后一行外的所有行
+                            if line.strip().startswith("##"):
+                                section_name = line.strip().replace("##", "").strip()
+                                if section_name:
+                                    yield {
+                                        "type": "thinking",
+                                        "content": f"\n📋 开始分析：{section_name}\n"
+                                    }
+                        current_line = lines[-1]  # 保留最后一行继续处理
+                        
+        except Exception as stream_error:
+            yield {
+                "type": "thinking",
+                "content": f"流式传输中断: {str(stream_error)}，正在处理已接收的内容..."
+            }
+            # 继续处理已接收的内容，不直接抛出异常
         
         yield {
             "type": "thinking",
@@ -346,10 +384,35 @@ def ai_correct_essay_stream(text: str, word_count: str = "不限字数", grade: 
         }
         
     except Exception as e:
-        yield {
-            "type": "error",
-            "error": f"AI批改失败：{str(e)}"
-        }
+        import traceback
+        error_msg = str(e)
+        
+        # 提供更详细的错误信息
+        if "timeout" in error_msg.lower():
+            yield {
+                "type": "error", 
+                "error": "AI服务响应超时，请稍后重试。建议：1) 检查网络连接 2) 缩短作文长度 3) 稍后再试"
+            }
+        elif "connection" in error_msg.lower():
+            yield {
+                "type": "error",
+                "error": "网络连接问题，请检查网络状态后重试"
+            }
+        elif "rate limit" in error_msg.lower():
+            yield {
+                "type": "error",
+                "error": "请求过于频繁，请稍等片刻后重试"
+            }
+        else:
+            yield {
+                "type": "error",
+                "error": f"AI批改失败：{error_msg}"
+            }
+        
+        # 记录详细错误日志（仅在开发环境）
+        import os
+        if os.getenv('DEBUG') == 'True':
+            print(f"Stream error traceback: {traceback.format_exc()}")
 
 
 def parse_correction_response(response: str) -> List[Dict[str, Any]]:
