@@ -246,7 +246,6 @@
                     this.hideResult();
                     this.hideSolutionCard();
                     this.expressionInput.value = '';
-                    this.expressionInput.focus();
 
                     const response = await fetch('/api/game-24/new-game', {
                         method: 'POST',
