@@ -33,11 +33,24 @@
             </button>
         </div>
         <div class="card p-4 shadow-sm">
+            <!-- 字幕优化状态提示 -->
+            <div id="subtitleOptimizationStatus" class="alert alert-info" 
+                 style="display:none; position:fixed; top:80px; right:20px; z-index:1000; max-width:300px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div class="d-flex align-items-center">
+                    <i id="optimizationIcon" class="fas fa-spinner fa-spin me-2"></i>
+                    <span id="optimizationMessage">正在优化字幕...</span>
+                </div>
+            </div>
+            
             <!-- 字幕显示区域 -->
-            <div id="subtitleArea" class="mb-4" style="min-height: 4em; font-size: 1.25em; text-align: center;">
-                <div id="subtitlePrev" style="color: #888; min-height: 1.5em;"></div>
-                <div id="subtitleCurrent" style="font-weight: bold; min-height: 1.5em; font-size: 1.2em;"></div>
-                <div id="subtitleNext" style="color: #888; min-height: 1.5em;"></div>
+            <div id="subtitleArea" class="mb-4" style="min-height: 14em; font-size: 1.25em; text-align: center;">
+                <div id="subtitle-3" class="subtitle-line" style="color: #aaa; min-height: 2em; line-height: 2em;"></div>
+                <div id="subtitle-2" class="subtitle-line" style="color: #999; min-height: 2em; line-height: 2em;"></div>
+                <div id="subtitle-1" class="subtitle-line" style="color: #777; min-height: 2em; line-height: 2em;"></div>
+                <div id="subtitleCurrent" class="subtitle-line subtitle-current" style="font-weight: bold; min-height: 2em; line-height: 2em; font-size: 1.3em; color: #000; background-color: rgba(255, 215, 0, 0.1); border-radius: 4px; padding: 0 8px;"></div>
+                <div id="subtitle1" class="subtitle-line" style="color: #777; min-height: 2em; line-height: 2em;"></div>
+                <div id="subtitle2" class="subtitle-line" style="color: #999; min-height: 2em; line-height: 2em;"></div>
+                <div id="subtitle3" class="subtitle-line" style="color: #aaa; min-height: 2em; line-height: 2em;"></div>
                 <div id="subtitleStatus" class="mt-3" style="display: none;">
                     <button id="generateSubtitleBtn" class="btn btn-primary btn-sm">生成字幕</button>
                     <span id="subtitleMessage" class="text-muted ms-2"></span>
@@ -211,9 +224,17 @@
         // 字幕相关变量
         let subtitles = [];
         let currentSubtitleIndex = 0;
-        const subtitlePrev = document.getElementById('subtitlePrev');
-        const subtitleCurrent = document.getElementById('subtitleCurrent');
-        const subtitleNext = document.getElementById('subtitleNext');
+        
+        // 7行字幕显示元素
+        const subtitleElements = {
+            '-3': document.getElementById('subtitle-3'),
+            '-2': document.getElementById('subtitle-2'), 
+            '-1': document.getElementById('subtitle-1'),
+            '0': document.getElementById('subtitleCurrent'),
+            '1': document.getElementById('subtitle1'),
+            '2': document.getElementById('subtitle2'),
+            '3': document.getElementById('subtitle3')
+        };
         // 解析 SRT 字幕
         function parseSRT(srtText) {
             const srtRegex = /\d+\s+([\d:,]+)\s+-->\s+([\d:,]+)\s+([\s\S]*?)(?=\n\d+\s|$)/g;
@@ -232,36 +253,201 @@
             }
             return result;
         }
-        // 加载字幕文件
+        
+        // 优化状态提示相关变量和函数
+        const optimizationStatus = document.getElementById('subtitleOptimizationStatus');
+        const optimizationIcon = document.getElementById('optimizationIcon');
+        const optimizationMessage = document.getElementById('optimizationMessage');
+        
+        // 显示优化状态提示
+        function showOptimizationStatus(message, type = 'processing') {
+            optimizationMessage.textContent = message;
+            
+            if (type === 'processing') {
+                optimizationIcon.className = 'fas fa-spinner fa-spin me-2';
+                optimizationStatus.className = 'alert alert-info';
+            } else if (type === 'success') {
+                optimizationIcon.className = 'fas fa-check-circle me-2';
+                optimizationStatus.className = 'alert alert-success';
+            } else if (type === 'error') {
+                optimizationIcon.className = 'fas fa-exclamation-triangle me-2';
+                optimizationStatus.className = 'alert alert-warning';
+            }
+            
+            optimizationStatus.style.display = 'block';
+        }
+        
+        // 隐藏优化状态提示
+        function hideOptimizationStatus() {
+            optimizationStatus.style.display = 'none';
+        }
+        
+        // 3秒后自动隐藏提示
+        function hideOptimizationStatusAfterDelay(delay = 3000) {
+            setTimeout(() => {
+                hideOptimizationStatus();
+            }, delay);
+        }
+        
+        // 触发字幕异步优化
+        async function triggerSubtitleOptimization(book, disc, file) {
+            try {
+                const response = await fetch('/api/optimize-subtitle', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        book: book,
+                        disc: disc,
+                        filename: file
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    if (data.status === 'completed') {
+                        // 如果已经有优化版本，直接加载
+                        showOptimizationStatus('发现已优化字幕，正在加载...', 'success');
+                        setTimeout(() => {
+                            loadOptimizedSubtitle(book, disc, file);
+                        }, 500);
+                    } else if (data.status === 'processing') {
+                        // 开始轮询检查状态
+                        pollOptimizationStatus(book, disc, file);
+                    }
+                } else {
+                    console.warn('Failed to trigger optimization:', data.error);
+                    hideOptimizationStatusAfterDelay();
+                }
+            } catch (error) {
+                console.error('Error triggering optimization:', error);
+                hideOptimizationStatusAfterDelay();
+            }
+        }
+        
+        // 轮询检查优化状态
+        async function pollOptimizationStatus(book, disc, file) {
+            const maxAttempts = 60; // 最多检查60次（5分钟）
+            let attempts = 0;
+            
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                
+                try {
+                    const response = await fetch(`/api/check-optimized-subtitle?book=${encodeURIComponent(book)}&disc=${encodeURIComponent(disc)}&filename=${encodeURIComponent(file)}`);
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        if (data.status === 'completed') {
+                            clearInterval(pollInterval);
+                            showOptimizationStatus('字幕优化完成！', 'success');
+                            hideOptimizationStatusAfterDelay();
+                            // 加载优化后的字幕
+                            loadOptimizedSubtitle(book, disc, file);
+                        } else if (data.status === 'failed') {
+                            clearInterval(pollInterval);
+                            showOptimizationStatus('字幕优化失败，使用原始字幕', 'error');
+                            hideOptimizationStatusAfterDelay();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking optimization status:', error);
+                }
+                
+                // 超时处理
+                if (attempts >= maxAttempts) {
+                    clearInterval(pollInterval);
+                    showOptimizationStatus('优化超时，使用原始字幕', 'error');
+                    hideOptimizationStatusAfterDelay();
+                }
+            }, 5000); // 每5秒检查一次
+        }
+        
+        // 加载优化后的字幕
+        async function loadOptimizedSubtitle(book, disc, file) {
+            const fileNameWithoutExt = file.substring(0, file.lastIndexOf('.')) || file;
+            const optimizedSubtitleUrl = `/subtitles/${encodeURIComponent(book)}/${encodeURIComponent(disc)}/${encodeURIComponent(fileNameWithoutExt)}.optimized.srt`;
+            
+            try {
+                const resp = await fetch(optimizedSubtitleUrl);
+                if (resp.ok) {
+                    const srtText = await resp.text();
+                    subtitles = parseSRT(srtText);
+                    currentSubtitleIndex = 0;
+                    updateSubtitleDisplay(audioPlayer.currentTime);
+                    console.log('Optimized subtitles loaded successfully');
+                }
+            } catch (error) {
+                console.error('Error loading optimized subtitle:', error);
+            }
+        }
+        
+        // 加载字幕文件（修改为支持异步优化）
         async function loadSubtitle(book, disc, file) {
             if (!book || !disc || !file) return;
 
             // 获取不带扩展名的文件名，然后添加.srt扩展名
             const fileNameWithoutExt = file.substring(0, file.lastIndexOf('.')) || file;
             const file_name = fileNameWithoutExt + '.srt';
-            const subtitleUrl = `/subtitles/${encodeURIComponent(book)}/${encodeURIComponent(disc)}/${encodeURIComponent(file_name)}`;
+            
+            // 1. 首先尝试加载优化后的字幕
+            const optimizedSubtitleUrl = `/subtitles/${encodeURIComponent(book)}/${encodeURIComponent(disc)}/${encodeURIComponent(fileNameWithoutExt)}.optimized.srt`;
+            
             try {
-                const resp = await fetch(subtitleUrl);
+                const optimizedResp = await fetch(optimizedSubtitleUrl);
+                if (optimizedResp.ok) {
+                    const optimizedSrtText = await optimizedResp.text();
+                    subtitles = parseSRT(optimizedSrtText);
+                    subtitleStatus.style.display = 'none';
+                    currentSubtitleIndex = 0;
+                    updateSubtitleDisplay(0);
+                    console.log('Using existing optimized subtitles');
+                    return; // 已有优化字幕，直接返回
+                }
+            } catch (e) {
+                // 优化字幕不存在或加载失败，继续加载原始字幕
+            }
+            
+            // 2. 加载原始字幕
+            const originalSubtitleUrl = `/subtitles/${encodeURIComponent(book)}/${encodeURIComponent(disc)}/${encodeURIComponent(file_name)}`;
+            
+            try {
+                const resp = await fetch(originalSubtitleUrl);
                 if (!resp.ok) {
                     throw new Error('字幕文件未找到');
                 }
+                
                 const srtText = await resp.text();
                 subtitles = parseSRT(srtText);
                 subtitleStatus.style.display = 'none';
+                currentSubtitleIndex = 0;
+                updateSubtitleDisplay(0);
+                
+                // 3. 显示优化提示并触发异步优化
+                showOptimizationStatus('正在优化字幕...', 'processing');
+                
+                // 延迟500ms触发优化，给用户看到字幕加载完成
+                setTimeout(() => {
+                    triggerSubtitleOptimization(book, disc, file);
+                }, 500);
+                
             } catch (e) {
                 subtitles = [];
                 subtitleStatus.style.display = 'block';
                 subtitleMessage.textContent = '没有找到字幕文件';
+                currentSubtitleIndex = 0;
+                updateSubtitleDisplay(0);
             }
-            currentSubtitleIndex = 0;
-            updateSubtitleDisplay(0);
         }
-        // 更新字幕显示
+        // 更新字幕显示（支持7行）
         function updateSubtitleDisplay(currentTime) {
             if (!subtitles.length) {
-                subtitlePrev.textContent = '';
-                subtitleCurrent.textContent = '';
-                subtitleNext.textContent = '';
+                // 清空所有字幕行
+                Object.values(subtitleElements).forEach(element => {
+                    element.textContent = '';
+                });
                 return;
             }
             
@@ -304,12 +490,21 @@
                 }
             }
             
-            // 如果索引发生改变，更新显示
+            // 如果索引发生改变，更新所有7行显示
             if (idx !== currentSubtitleIndex) {
                 currentSubtitleIndex = idx;
-                subtitlePrev.textContent = subtitles[idx - 1]?.text || '';
-                subtitleCurrent.textContent = subtitles[idx]?.text || '';
-                subtitleNext.textContent = subtitles[idx + 1]?.text || '';
+                
+                // 更新7行字幕显示（当前行前3行，后3行）
+                for (let offset = -3; offset <= 3; offset++) {
+                    const subtitleIndex = idx + offset;
+                    const element = subtitleElements[offset.toString()];
+                    
+                    if (subtitleIndex >= 0 && subtitleIndex < subtitles.length) {
+                        element.textContent = subtitles[subtitleIndex].text || '';
+                    } else {
+                        element.textContent = '';
+                    }
+                }
             }
         }
         // 监听音频播放进度

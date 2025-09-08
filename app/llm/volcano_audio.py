@@ -6,7 +6,12 @@ import re
 import pathlib
 from dotenv import load_dotenv
 
-load_dotenv()   
+load_dotenv()
+
+# 导入LLM providers
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.llm.providers import get_provider_config, AliyunModel   
 
 def log_time(func):
     def wrapper(*args, **kw):
@@ -155,7 +160,176 @@ class VolcanoAudioProvider():
             print(f"Error formatting time: {str(e)}")
             return "00:00:00,000"
 
-def generate_subtitle_for_mp3(audio_url, output_path=None, language="en"):
+def parse_srt_to_entries(srt_content):
+    """
+    解析SRT字幕内容为结构化数据
+    
+    Args:
+        srt_content: SRT格式字幕内容
+        
+    Returns:
+        List[Dict]: 字幕条目列表，每个条目包含index、start_time、end_time、text
+    """
+    entries = []
+    if not srt_content or not srt_content.strip():
+        return entries
+    
+    # SRT格式正则表达式
+    pattern = r'(\d+)\n([\d:,]+)\s+-->\s+([\d:,]+)\n((?:.*\n?)*?)(?=\n\d+\n|$)'
+    matches = re.findall(pattern, srt_content.strip() + '\n', re.MULTILINE)
+    
+    for match in matches:
+        index, start_time, end_time, text = match
+        entries.append({
+            'index': int(index),
+            'start_time': start_time.strip(),
+            'end_time': end_time.strip(), 
+            'text': text.strip()
+        })
+    
+    return entries
+
+def entries_to_srt(entries):
+    """
+    将结构化字幕数据转换为SRT格式
+    
+    Args:
+        entries: 字幕条目列表
+        
+    Returns:
+        str: SRT格式字幕内容
+    """
+    srt_parts = []
+    for i, entry in enumerate(entries):
+        if entry['text'].strip():  # 只保留有文本内容的条目
+            srt_parts.append(f"{i+1}\n{entry['start_time']} --> {entry['end_time']}\n{entry['text']}\n")
+    
+    return "\n".join(srt_parts)
+
+def optimize_subtitles_with_llm(srt_content, max_retries=2):
+    """
+    使用LLM优化字幕，将碎片化的短句合并为完整的语义单元
+    
+    Args:
+        srt_content: 原始SRT字幕内容
+        max_retries: 最大重试次数
+        
+    Returns:
+        str: 优化后的SRT字幕内容
+    """
+    if not srt_content or not srt_content.strip():
+        return srt_content
+    
+    try:
+        # 解析原始字幕
+        entries = parse_srt_to_entries(srt_content)
+        if len(entries) < 2:  # 如果字幕条目太少，不需要优化
+            return srt_content
+            
+        print(f"Original subtitle entries: {len(entries)}")
+        
+        # 准备给LLM的文本格式
+        text_for_llm = "原始字幕条目:\n"
+        for i, entry in enumerate(entries):
+            text_for_llm += f"{i+1}. [{entry['start_time']} --> {entry['end_time']}] {entry['text']}\n"
+        
+        # 构建LLM提示词
+        prompt = f"""你是一个字幕优化专家。请将下面碎片化的英语字幕合并成语义完整的句子。
+
+【要求】:
+1. 将相邻的短句合并为完整的语义单元
+2. 每行应该是一个完整的句子或语法单元
+3. 保持原文内容不变，只做合并，不要修改单词
+4. 合并时使用最早的开始时间和最晚的结束时间
+5. 输出格式严格按照: 序号. [开始时间 --> 结束时间] 文本内容
+
+【示例】:
+原始: 1. [00:00:00,000 --> 00:00:01,000] What's
+原始: 2. [00:00:01,000 --> 00:00:02,000] wrong
+合并: 1. [00:00:00,000 --> 00:00:02,000] What's wrong
+
+{text_for_llm}
+
+请输出合并后的字幕条目:"""
+
+        # 获取LLM配置并调用
+        provider = get_provider_config('aliyun')
+        client = provider.get_llm()
+        
+        for attempt in range(max_retries + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=AliyunModel.QWEN_PLUS_LATEST.value,  # 使用较便宜的模型
+                    messages=[
+                        {"role": "system", "content": "你是一个专业的英语字幕优化专家，擅长将碎片化的字幕合并为完整句子。"},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1,  # 低温度确保一致性
+                    max_tokens=2000
+                )
+                
+                llm_response = response.choices[0].message.content
+                print(f"LLM response received (attempt {attempt + 1})")
+                
+                # 解析LLM的响应
+                optimized_entries = parse_llm_response(llm_response)
+                if optimized_entries:
+                    optimized_srt = entries_to_srt(optimized_entries)
+                    print(f"Optimized subtitle entries: {len(optimized_entries)}")
+                    return optimized_srt
+                else:
+                    print(f"Failed to parse LLM response on attempt {attempt + 1}")
+                    if attempt < max_retries:
+                        time.sleep(1)  # 等待1秒后重试
+                    continue
+                    
+            except Exception as e:
+                print(f"LLM call failed on attempt {attempt + 1}: {str(e)}")
+                if attempt < max_retries:
+                    time.sleep(2)  # 等待2秒后重试
+                    continue
+                else:
+                    break
+        
+        print("LLM optimization failed, returning original subtitles")
+        return srt_content
+        
+    except Exception as e:
+        print(f"Error in optimize_subtitles_with_llm: {str(e)}")
+        return srt_content
+
+def parse_llm_response(llm_response):
+    """
+    解析LLM返回的字幕优化结果
+    
+    Args:
+        llm_response: LLM的响应文本
+        
+    Returns:
+        List[Dict]: 解析后的字幕条目列表
+    """
+    entries = []
+    lines = llm_response.split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # 匹配格式: 序号. [时间1 --> 时间2] 文本内容
+        match = re.match(r'(\d+)\.\s*\[([^\]]+)\s+-->\s+([^\]]+)\]\s*(.+)', line)
+        if match:
+            index, start_time, end_time, text = match.groups()
+            entries.append({
+                'index': int(index),
+                'start_time': start_time.strip(),
+                'end_time': end_time.strip(),
+                'text': text.strip()
+            })
+    
+    return entries
+
+def generate_subtitle_for_mp3(audio_url, output_path=None, language="en", enable_llm_optimization=True):
     """
     为MP3文件生成SRT字幕并保存到指定路径
     
@@ -163,6 +337,7 @@ def generate_subtitle_for_mp3(audio_url, output_path=None, language="en"):
         audio_url: 音频文件URL
         output_path: 字幕文件保存路径，如果为None则仅返回字幕内容而不保存
         language: 语言代码，默认为英语
+        enable_llm_optimization: 是否启用LLM优化，默认True
         
     Returns:
         生成的SRT字幕内容
@@ -177,6 +352,16 @@ def generate_subtitle_for_mp3(audio_url, output_path=None, language="en"):
         
         # 转换为SRT格式
         srt_content = provider.convert_to_srt(subtitles_data)
+        
+        # 如果启用LLM优化，则进行字幕优化
+        if enable_llm_optimization and srt_content and language == "en":
+            print("Optimizing subtitles with LLM...")
+            optimized_srt = optimize_subtitles_with_llm(srt_content)
+            if optimized_srt != srt_content:  # 只有优化成功时才替换
+                srt_content = optimized_srt
+                print("Subtitles optimized successfully")
+            else:
+                print("LLM optimization skipped or failed, using original subtitles")
         
         # 如果指定了输出路径，保存SRT文件
         if output_path:
@@ -195,7 +380,7 @@ def generate_subtitle_for_mp3(audio_url, output_path=None, language="en"):
         print(f"Error generating subtitle: {str(e)}")
         return None
 
-def get_or_generate_subtitle(audio_url, book_name, disc_no, track_name, base_dir="app/static/subtitles"):
+def get_or_generate_subtitle(audio_url, book_name, disc_no, track_name, base_dir="app/static/subtitles", enable_llm_optimization=True):
     """
     获取或生成字幕，如果字幕文件不存在则生成新的
     
@@ -223,7 +408,7 @@ def get_or_generate_subtitle(audio_url, book_name, disc_no, track_name, base_dir
     
     # 生成新的字幕
     print(f"Generating subtitle for: {audio_url}")
-    srt_content = generate_subtitle_for_mp3(audio_url, subtitle_path)
+    srt_content = generate_subtitle_for_mp3(audio_url, subtitle_path, enable_llm_optimization=enable_llm_optimization)
     
     return srt_content
 

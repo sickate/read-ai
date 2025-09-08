@@ -1,7 +1,9 @@
 from flask import Flask, render_template, url_for, request, jsonify, send_file, Response
 import os
 import json
-from app.llm.volcano_audio import get_or_generate_subtitle
+import threading
+import time
+from app.llm.volcano_audio import get_or_generate_subtitle, optimize_subtitles_with_llm
 import requests
 from utils.text_helper import analyze_text, ai_correct_essay, ai_correct_essay_stream
 from app.game_24 import game_24
@@ -188,6 +190,144 @@ def generate_subtitle():
     except Exception as e:
         # 返回错误信息
         return jsonify({"error": str(e)}), 500
+
+# 全局变量跟踪优化任务状态
+optimization_tasks = {}
+
+@app.route('/api/optimize-subtitle', methods=['POST'])
+def optimize_subtitle():
+    """
+    触发字幕异步优化任务
+    """
+    data = request.json
+    book = data.get('book')
+    disc = data.get('disc')
+    filename = data.get('filename')
+    
+    if not all([book, disc, filename]):
+        return jsonify({"error": "Missing required parameters"}), 400
+    
+    # 创建任务唯一标识
+    task_key = f"{book}_{disc}_{filename}"
+    
+    # 检查是否已有优化文件
+    filename_without_ext = os.path.splitext(filename)[0]
+    optimized_subtitle_path = os.path.join(SUBTITLE_ROOT, book, disc, f"{filename_without_ext}.optimized.srt")
+    
+    if os.path.exists(optimized_subtitle_path):
+        return jsonify({
+            "success": True,
+            "status": "completed",
+            "optimized_url": f"/subtitles/{book}/{disc}/{filename_without_ext}.optimized.srt"
+        })
+    
+    # 检查原始字幕是否存在
+    original_subtitle_path = os.path.join(SUBTITLE_ROOT, book, disc, f"{filename_without_ext}.srt")
+    if not os.path.exists(original_subtitle_path):
+        return jsonify({"error": "Original subtitle not found"}), 404
+    
+    # 检查是否正在处理中
+    if task_key in optimization_tasks and optimization_tasks[task_key]['status'] == 'processing':
+        return jsonify({
+            "success": True,
+            "status": "processing",
+            "message": "Optimization already in progress"
+        })
+    
+    # 标记任务开始
+    optimization_tasks[task_key] = {
+        'status': 'processing',
+        'start_time': time.time()
+    }
+    
+    def optimize_subtitle_task():
+        try:
+            # 读取原始字幕
+            with open(original_subtitle_path, 'r', encoding='utf-8') as f:
+                original_srt = f.read()
+            
+            # 调用LLM优化
+            optimized_srt = optimize_subtitles_with_llm(original_srt)
+            
+            # 保存优化后的字幕
+            if optimized_srt and optimized_srt != original_srt:
+                os.makedirs(os.path.dirname(optimized_subtitle_path), exist_ok=True)
+                with open(optimized_subtitle_path, 'w', encoding='utf-8') as f:
+                    f.write(optimized_srt)
+                
+                optimization_tasks[task_key] = {
+                    'status': 'completed',
+                    'end_time': time.time(),
+                    'optimized_url': f"/subtitles/{book}/{disc}/{filename_without_ext}.optimized.srt"
+                }
+                print(f"Subtitle optimization completed for {task_key}")
+            else:
+                optimization_tasks[task_key] = {
+                    'status': 'failed',
+                    'end_time': time.time(),
+                    'error': 'LLM optimization failed or returned unchanged content'
+                }
+                print(f"Subtitle optimization failed for {task_key}")
+                
+        except Exception as e:
+            optimization_tasks[task_key] = {
+                'status': 'failed',
+                'end_time': time.time(),
+                'error': str(e)
+            }
+            print(f"Subtitle optimization error for {task_key}: {str(e)}")
+    
+    # 启动后台线程
+    thread = threading.Thread(target=optimize_subtitle_task)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "status": "processing",
+        "task_id": task_key,
+        "message": "Optimization started"
+    })
+
+@app.route('/api/check-optimized-subtitle')
+def check_optimized_subtitle():
+    """
+    检查字幕优化状态
+    """
+    book = request.args.get('book')
+    disc = request.args.get('disc')
+    filename = request.args.get('filename')
+    
+    if not all([book, disc, filename]):
+        return jsonify({"error": "Missing required parameters"}), 400
+    
+    task_key = f"{book}_{disc}_{filename}"
+    filename_without_ext = os.path.splitext(filename)[0]
+    
+    # 检查优化文件是否存在
+    optimized_subtitle_path = os.path.join(SUBTITLE_ROOT, book, disc, f"{filename_without_ext}.optimized.srt")
+    
+    if os.path.exists(optimized_subtitle_path):
+        return jsonify({
+            "success": True,
+            "status": "completed",
+            "optimized_url": f"/subtitles/{book}/{disc}/{filename_without_ext}.optimized.srt"
+        })
+    
+    # 检查任务状态
+    if task_key in optimization_tasks:
+        task = optimization_tasks[task_key]
+        return jsonify({
+            "success": True,
+            "status": task['status'],
+            "error": task.get('error'),
+            "optimized_url": task.get('optimized_url')
+        })
+    
+    return jsonify({
+        "success": True,
+        "status": "not_started"
+    })
 
 @app.route('/word-counter')
 def word_counter():
