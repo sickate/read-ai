@@ -162,13 +162,13 @@ class VolcanoAudioProvider():
 
 def parse_srt_to_entries(srt_content):
     """
-    解析SRT字幕内容为结构化数据
+    解析SRT字幕内容为结构化数据（支持说话人标记）
     
     Args:
         srt_content: SRT格式字幕内容
         
     Returns:
-        List[Dict]: 字幕条目列表，每个条目包含index、start_time、end_time、text
+        List[Dict]: 字幕条目列表，每个条目包含index、start_time、end_time、text、speaker
     """
     entries = []
     if not srt_content or not srt_content.strip():
@@ -180,29 +180,45 @@ def parse_srt_to_entries(srt_content):
     
     for match in matches:
         index, start_time, end_time, text = match
+        text_content = text.strip()
+        speaker = None
+        
+        # 检查文本是否包含说话人标记
+        speaker_match = re.match(r'\[([ABC])\]\s*(.*)', text_content)
+        if speaker_match:
+            speaker = speaker_match.group(1)
+            text_content = speaker_match.group(2)
+        
         entries.append({
             'index': int(index),
             'start_time': start_time.strip(),
             'end_time': end_time.strip(), 
-            'text': text.strip()
+            'text': text_content,
+            'speaker': speaker
         })
     
     return entries
 
 def entries_to_srt(entries):
     """
-    将结构化字幕数据转换为SRT格式
+    将结构化字幕数据转换为SRT格式（支持说话人信息）
     
     Args:
-        entries: 字幕条目列表
+        entries: 字幕条目列表，可能包含说话人信息
         
     Returns:
-        str: SRT格式字幕内容
+        str: SRT格式字幕内容，说话人信息嵌入到文本中
     """
     srt_parts = []
     for i, entry in enumerate(entries):
         if entry['text'].strip():  # 只保留有文本内容的条目
-            srt_parts.append(f"{i+1}\n{entry['start_time']} --> {entry['end_time']}\n{entry['text']}\n")
+            text_content = entry['text'].strip()
+            
+            # 如果有说话人信息，将其嵌入到文本开头
+            if entry.get('speaker'):
+                text_content = f"[{entry['speaker']}] {text_content}"
+            
+            srt_parts.append(f"{i+1}\n{entry['start_time']} --> {entry['end_time']}\n{text_content}\n")
     
     return "\n".join(srt_parts)
 
@@ -234,23 +250,40 @@ def optimize_subtitles_with_llm(srt_content, max_retries=2):
             text_for_llm += f"{i+1}. [{entry['start_time']} --> {entry['end_time']}] {entry['text']}\n"
         
         # 构建LLM提示词
-        prompt = f"""你是一个字幕优化专家。请将下面碎片化的英语字幕合并成语义完整的句子。
+        prompt = f"""你是一个专业的英语字幕优化专家。请将下面碎片化的英语字幕优化成自然流畅的对话字幕。
 
-【要求】:
-1. 将相邻的短句合并为完整的语义单元
-2. 每行应该是一个完整的句子或语法单元
-3. 保持原文内容不变，只做合并，不要修改单词
-4. 合并时使用最早的开始时间和最晚的结束时间
-5. 输出格式严格按照: 序号. [开始时间 --> 结束时间] 文本内容
+【核心要求】:
+1. 将相邻的短句合并为完整的语义单元，但不要跨越不同说话人
+2. 添加正确的标点符号（逗号、句号、问号、感叹号）
+3. 处理大小写（句首大写、专有名词大写）
+4. 识别对话中的说话人切换，为不同说话人添加标记
+
+【合并规则】:
+- 同一说话人的连续短句可以合并
+- 问句和答句通常来自不同说话人，不要合并
+- 呼唤人名、打招呼通常是对话的开始
+- 保持对话的自然节奏和停顿
+
+【说话人标记】:
+- 为不同的说话人添加 [A]、[B]、[C] 等标记
+- 第一个说话人标记为 [A]，第二个为 [B]，以此类推
+- 判断说话人切换的线索：问答关系、称呼转换、话题转换
+
+【输出格式】:
+序号. [开始时间 --> 结束时间] [说话人] 文本内容
 
 【示例】:
 原始: 1. [00:00:00,000 --> 00:00:01,000] What's
 原始: 2. [00:00:01,000 --> 00:00:02,000] wrong
-合并: 1. [00:00:00,000 --> 00:00:02,000] What's wrong
+原始: 3. [00:00:02,500 --> 00:00:04,000] I can't find
+原始: 4. [00:00:04,000 --> 00:00:05,500] my mom
+
+优化: 1. [00:00:00,000 --> 00:00:02,000] [A] What's wrong?
+优化: 2. [00:00:02,500 --> 00:00:05,500] [B] I can't find my mom.
 
 {text_for_llm}
 
-请输出合并后的字幕条目:"""
+请输出优化后的字幕条目:"""
 
         # 获取LLM配置并调用
         provider = get_provider_config('aliyun')
@@ -300,13 +333,13 @@ def optimize_subtitles_with_llm(srt_content, max_retries=2):
 
 def parse_llm_response(llm_response):
     """
-    解析LLM返回的字幕优化结果
+    解析LLM返回的字幕优化结果（支持说话人标记）
     
     Args:
         llm_response: LLM的响应文本
         
     Returns:
-        List[Dict]: 解析后的字幕条目列表
+        List[Dict]: 解析后的字幕条目列表，包含说话人信息
     """
     entries = []
     lines = llm_response.split('\n')
@@ -316,15 +349,29 @@ def parse_llm_response(llm_response):
         if not line:
             continue
             
-        # 匹配格式: 序号. [时间1 --> 时间2] 文本内容
-        match = re.match(r'(\d+)\.\s*\[([^\]]+)\s+-->\s+([^\]]+)\]\s*(.+)', line)
+        # 匹配格式: 序号. [时间1 --> 时间2] [说话人] 文本内容
+        match = re.match(r'(\d+)\.\s*\[([^\]]+)\s+-->\s+([^\]]+)\]\s*\[([^\]]+)\]\s*(.+)', line)
         if match:
-            index, start_time, end_time, text = match.groups()
+            index, start_time, end_time, speaker, text = match.groups()
             entries.append({
                 'index': int(index),
                 'start_time': start_time.strip(),
                 'end_time': end_time.strip(),
-                'text': text.strip()
+                'text': text.strip(),
+                'speaker': speaker.strip()
+            })
+            continue
+            
+        # 兼容旧格式: 序号. [时间1 --> 时间2] 文本内容 （无说话人标记）
+        match_old = re.match(r'(\d+)\.\s*\[([^\]]+)\s+-->\s+([^\]]+)\]\s*(.+)', line)
+        if match_old:
+            index, start_time, end_time, text = match_old.groups()
+            entries.append({
+                'index': int(index),
+                'start_time': start_time.strip(),
+                'end_time': end_time.strip(),
+                'text': text.strip(),
+                'speaker': None  # 无说话人信息
             })
     
     return entries
