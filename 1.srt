@@ -1,2 +1,0 @@
-Processing audio URL: https://read-ai.instap.net/static/audios/ET3/disc1/04%20%E6%9B%B2%E7%9B%AE%204.mp3
-Error in generate_subtitle_with_dashscope: No such file or directory: https://read-ai.instap.net/static/audios/ET3/disc1/04%20%E6%9B%B2%E7%9B%AE%204.mp3
