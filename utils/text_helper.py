@@ -105,7 +105,7 @@ def get_smart_llm_provider(language: str = "zh"):
     else:
         # 其他环境使用Gemini（轻量且多语言支持好）
         try:
-            provider = get_provider_config('google')
+            provider = get_provider_config('gemini')
             model = GeminiModel.GEMINI_2_5_FLASH_LITE.value
         except:
             # 如果Gemini配置有问题，回退到阿里云
