@@ -179,13 +179,13 @@ class XAIProvider(ProviderBase):
     __models__ = [model.value for model in XAIModel]
 
 class GeminiProvider(ProviderBase):
-    """Gemini提供者配置"""
+    """Gemini提供者配置 - 使用转发服务"""
 
     __provider__ = "gemini"
-    __api_base__ = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    __api_base__ = "https://gemini.parallelstreamllc.com/v1beta/models"
     __api_key__ = os.getenv("GOOGLE_API_KEY")
-    __default_model__ = GeminiModel.GEMINI_1_5_PRO.value
-    __cheap_model__ = GeminiModel.GEMINI_2_0_FLASH.value
+    __default_model__ = GeminiModel.GEMINI_2_5_FLASH_LITE.value
+    __cheap_model__ = GeminiModel.GEMINI_2_5_FLASH_LITE.value
     __models__ = [model.value for model in GeminiModel]
 
 class VolcanoArkProvider(ProviderBase):
