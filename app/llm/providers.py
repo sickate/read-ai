@@ -5,7 +5,7 @@ including model types and API keys.
 """
 
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Iterator
 from enum import Enum, auto
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -14,6 +14,7 @@ from openai import OpenAI
 import requests
 import dashscope
 from dashscope.audio.asr import Recognition
+import time
 
 from http import HTTPStatus
 from dashscope.audio.asr import Transcription
@@ -22,6 +23,231 @@ import json
 
 # Load environment variables
 load_dotenv()
+
+
+class GeminiClient:
+    """Gemini API客户端包装器，兼容OpenAI客户端接口"""
+
+    def __init__(self, api_key: str, base_url: str, timeout: int = 120, **kwargs):
+        self.api_key = api_key
+        self.base_url = base_url
+        self.timeout = timeout
+        self.chat = GeminiChatCompletions(self)
+
+class GeminiChatCompletions:
+    """Gemini Chat Completions API包装器"""
+
+    def __init__(self, client: GeminiClient):
+        self.client = client
+        self.completions = self  # 兼容OpenAI client.chat.completions.create()格式
+
+    def create(self, model: str, messages: List[Dict[str, str]], temperature: float = 0.3,
+               max_tokens: int = 2000, stream: bool = False, timeout: int = None, **kwargs):
+        """创建chat completion，兼容OpenAI接口"""
+        timeout = timeout or self.client.timeout
+
+        # 转换OpenAI格式的消息为Gemini格式
+        gemini_contents = self._convert_messages_to_gemini(messages)
+
+        # 构建Gemini API请求
+        payload = {
+            "contents": gemini_contents,
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens
+            }
+        }
+
+        headers = {
+            'x-goog-api-key': self.client.api_key,
+            'Content-Type': 'application/json'
+        }
+
+        if stream:
+            url = f"{self.client.base_url}/models/{model}:streamGenerateContent"
+            return self._create_stream_response(url, headers, payload, timeout)
+        else:
+            url = f"{self.client.base_url}/models/{model}:generateContent"
+            return self._create_sync_response(url, headers, payload, timeout)
+
+    def _convert_messages_to_gemini(self, messages: List[Dict[str, str]]) -> List[Dict]:
+        """将OpenAI格式的消息转换为Gemini格式"""
+        contents = []
+        combined_content = ""
+
+        # 合并system和user消息为单个user消息
+        for message in messages:
+            role = message.get("role", "user")
+            content = message.get("content", "")
+
+            if role in ["user", "system"]:
+                if combined_content:
+                    combined_content += "\n\n" + content
+                else:
+                    combined_content = content
+
+        # 创建单个内容条目
+        if combined_content:
+            contents.append({
+                "parts": [{"text": combined_content}]
+            })
+
+        return contents
+
+    def _create_sync_response(self, url: str, headers: Dict, payload: Dict, timeout: int):
+        """创建同步响应"""
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
+
+            gemini_response = response.json()
+            return self._convert_gemini_to_openai_response(gemini_response)
+
+        except Exception as e:
+            raise Exception(f"Gemini API request failed: {str(e)}")
+
+    def _create_stream_response(self, url: str, headers: Dict, payload: Dict, timeout: int):
+        """创建流式响应 - 处理JSON数组流"""
+        try:
+            # 使用真正的流式请求
+            response = requests.post(url, headers=headers, json=payload,
+                                   timeout=timeout, stream=True)
+            response.raise_for_status()
+
+            # 解析JSON数组流
+            buffer = ""
+            in_array = False
+            brace_count = 0
+            current_object = ""
+
+            for chunk in response.iter_content(decode_unicode=True):
+                if chunk:
+                    buffer += chunk
+
+                    # 逐字符处理
+                    i = 0
+                    while i < len(buffer):
+                        char = buffer[i]
+
+                        if not in_array:
+                            if char == '[':
+                                in_array = True
+                        else:
+                            if char == '{':
+                                brace_count += 1
+                                current_object += char
+                            elif char == '}':
+                                brace_count -= 1
+                                current_object += char
+
+                                if brace_count == 0:
+                                    # 完成了一个JSON对象
+                                    try:
+                                        json_obj = json.loads(current_object.strip())
+                                        text_chunk = self._extract_text_from_json(json_obj)
+                                        if text_chunk:
+                                            yield GeminiStreamChunk(text_chunk)
+                                    except json.JSONDecodeError:
+                                        pass  # 忽略无效的JSON
+
+                                    current_object = ""
+                            elif brace_count > 0:
+                                current_object += char
+                            elif char == ']':
+                                # 数组结束
+                                break
+
+                        i += 1
+
+                    # 更新缓冲区，移除已处理的字符
+                    buffer = buffer[i:]
+
+        except Exception as e:
+            raise Exception(f"Gemini streaming API request failed: {str(e)}")
+
+    def _extract_text_from_json(self, json_obj: Dict) -> str:
+        """从JSON对象中提取文本内容"""
+        try:
+            candidates = json_obj.get('candidates', [])
+            if candidates and len(candidates) > 0:
+                candidate = candidates[0]
+                if 'content' in candidate and 'parts' in candidate['content']:
+                    parts = candidate['content']['parts']
+                    if parts and len(parts) > 0 and 'text' in parts[0]:
+                        return parts[0]['text']
+        except:
+            pass
+        return ""
+
+    def _simulate_stream(self, content: str):
+        """模拟流式响应"""
+        words = content.split()
+        for i, word in enumerate(words):
+            chunk_content = word + (" " if i < len(words) - 1 else "")
+            yield GeminiStreamChunk(chunk_content)
+            time.sleep(0.01)  # 小延迟模拟流式效果
+
+    def _convert_gemini_to_openai_response(self, gemini_response: Dict):
+        """将Gemini响应转换为OpenAI格式"""
+        try:
+            candidates = gemini_response.get('candidates', [])
+            if not candidates:
+                raise Exception("No candidates in Gemini response")
+
+            content = candidates[0].get('content', {})
+            parts = content.get('parts', [])
+            if not parts:
+                raise Exception("No parts in Gemini response content")
+
+            text = parts[0].get('text', '')
+
+            return GeminiResponse(text)
+
+        except Exception as e:
+            raise Exception(f"Failed to convert Gemini response: {str(e)}")
+
+
+class GeminiResponse:
+    """模拟OpenAI响应格式"""
+
+    def __init__(self, content: str):
+        self.choices = [GeminiChoice(content)]
+
+
+class GeminiChoice:
+    """模拟OpenAI Choice对象"""
+
+    def __init__(self, content: str):
+        self.message = GeminiMessage(content)
+
+
+class GeminiMessage:
+    """模拟OpenAI Message对象"""
+
+    def __init__(self, content: str):
+        self.content = content
+
+
+class GeminiStreamChunk:
+    """模拟OpenAI流式响应chunk"""
+
+    def __init__(self, content: str):
+        self.choices = [GeminiStreamChoice(content)]
+
+
+class GeminiStreamChoice:
+    """模拟OpenAI流式Choice对象"""
+
+    def __init__(self, content: str):
+        self.delta = GeminiStreamDelta(content)
+
+
+class GeminiStreamDelta:
+    """模拟OpenAI流式Delta对象"""
+
+    def __init__(self, content: str):
+        self.content = content
+
 
 # 模型枚举类
 class SiliconFlowModel(str, Enum):
@@ -63,7 +289,8 @@ class XAIModel(str, Enum):
 class GeminiModel(str, Enum):
     """Gemini模型枚举"""
     GEMINI_2_5_PRO_EXP = "gemini-2.5-pro-exp-03-25"
-    GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite" # Ultra lightweight model for basic tasks
+    GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite-preview-06-17" # Ultra lightweight model for basic tasks
+    GEMINI_2_5_FLASH = "gemini-2.5-flash"
     GEMINI_2_0_FLASH = "gemini-2.0-flash" # in/out price per million: USD $0.1/$0.4
     GEMINI_2_0_FLASH_LITE = "gemini-2.0-flash-lite" # in/out price per million: USD $0.075/$0.3
     GEMINI_1_5_PRO = "gemini-1.5-pro"
@@ -182,11 +409,28 @@ class GeminiProvider(ProviderBase):
     """Gemini提供者配置 - 使用转发服务"""
 
     __provider__ = "gemini"
-    __api_base__ = "https://gemini.parallelstreamllc.com/v1beta/models"
+    __api_base__ = "https://gemini.parallelstreamllc.com/v1beta"
     __api_key__ = os.getenv("GOOGLE_API_KEY")
     __default_model__ = GeminiModel.GEMINI_2_5_FLASH_LITE.value
     __cheap_model__ = GeminiModel.GEMINI_2_5_FLASH_LITE.value
     __models__ = [model.value for model in GeminiModel]
+
+    def get_llm(self, timeout=120, **kwargs):
+        """获取Gemini兼容的LLM客户端
+
+        Args:
+            timeout: 超时时间（秒）
+            **kwargs: 传递给客户端的额外参数
+
+        Returns:
+            GeminiClient: 自定义的Gemini客户端包装器
+        """
+        return GeminiClient(
+            api_key=self.__api_key__,
+            base_url=self.__api_base__,
+            timeout=timeout,
+            **kwargs
+        )
 
 class VolcanoArkProvider(ProviderBase):
     """VolcanoArk提供者配置"""

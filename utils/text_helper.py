@@ -98,12 +98,10 @@ def get_smart_llm_provider(language: str = "zh"):
     """
     hostname = socket.gethostname().lower()
 
-    # 如果是maru服务器，使用阿里云模型（因为没有VPN无法访问Gemini）
-    if hostname == "maru":
+    if language == "zh":
         provider = get_provider_config('aliyun')
         model = AliyunModel.DEEPSEEK_R1.value
     else:
-        # 其他环境使用Gemini（轻量且多语言支持好）
         try:
             provider = get_provider_config('gemini')
             model = GeminiModel.GEMINI_2_5_FLASH_LITE.value

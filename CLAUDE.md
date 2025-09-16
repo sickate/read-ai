@@ -112,3 +112,4 @@ Uses Fabric for deployment automation:
 - File uploads restricted to audio formats
 - API keys stored in environment variables only
 - Input validation for text analysis and essay correction
+- 项目运行在本地 5010 端口且可以自动 reload, 任何修改能直接生效. 不需要额外启动 flask 实例来测试

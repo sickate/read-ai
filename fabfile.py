@@ -70,9 +70,8 @@ def start_app(ctx):
         logger.info('Kill existing apps...')
         ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && kill $(pgrep -a gunicorn | awk '{{print $1}}') || true")
         logger.info('Spawning new apps...')
-        # 🔧 修复：添加AI批改所需的超时和流式输出配置
-        # 使用setsid和完全的IO重定向来彻底分离进程
-        ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && setsid nohup gunicorn app:app -w {worker_num} -b {address}:{port} --timeout {timeout} --keep-alive {keepalive} --max-requests {max_requests} --max-requests-jitter {max_requests_jitter} --log-level {log_level} < /dev/null > log/{app_name}.log 2> log/{app_name}.err & disown", pty=False)
+        # 🔧 修复：使用专用脚本启动gunicorn，解决SSH会话挂起问题
+        ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && bash start_gunicorn.sh {worker_num} {address} {port} {timeout} {keepalive} {max_requests} {max_requests_jitter} {log_level} {app_name}", pty=False)
         logger.info("Server started.")
     else:
         activate_cmd = f'source ~/.virtualenvs/{app_name}/bin/activate'
@@ -80,9 +79,8 @@ def start_app(ctx):
             logger.info('Kill existing apps...')
             ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && export PATH=/home/`whoami`/.local/bin:$PATH && kill $(pgrep -a gunicorn | awk '{{print $1}}') || true")
             logger.info('Spawning new apps...')
-            # 🔧 修复：添加AI批改所需的超时和流式输出配置
-            # 使用setsid和完全的IO重定向来彻底分离进程
-            ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && setsid nohup gunicorn app:app -w {worker_num} -b {address}:{port} --timeout {timeout} --keep-alive {keepalive} --max-requests {max_requests} --max-requests-jitter {max_requests_jitter} --log-level {log_level} < /dev/null > log/{app_name}.log 2> log/{app_name}.err & disown", pty=False)
+            # 🔧 修复：使用专用脚本启动gunicorn，解决SSH会话挂起问题
+            ctx.c.run(f"cd {os.path.join(deploy_directory, 'current')} && bash start_gunicorn.sh {worker_num} {address} {port} {timeout} {keepalive} {max_requests} {max_requests_jitter} {log_level} {app_name}", pty=False)
 
             logger.info("Server started.")
 

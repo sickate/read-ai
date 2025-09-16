@@ -1,5 +1,31 @@
 # 更新日志 / Change Log
 
+## 2025-09-16 - Gemini流式传输支持与API修复
+
+### 🚀 重大更新
+- **完全修复Gemini模型连接问题**: 解决"新的 gemini model报错"问题
+- **真正的流式传输支持**: 实现Gemini API的真正流式输出
+- **智能流式解析**: 支持JSON数组流格式的实时解析
+
+### 🔧 技术改进
+- **自定义Gemini客户端**: 创建GeminiClient包装器，兼容OpenAI接口
+- **流式端点优化**: 使用streamGenerateContent端点实现真正的流式传输
+- **增量JSON解析**: 实现逐步解析JSON数组流的算法
+- **API配置修复**: 修正GeminiProvider的base_url配置
+
+### 📝 详细变更
+- 修复providers.py中的GeminiProvider配置
+- 实现真正的流式响应处理，支持逐块文本输出
+- 添加JSON数组流解析器，处理Gemini特有的响应格式
+- 保持向后兼容性，同步API仍正常工作
+
+### 🧪 测试验证
+- 同步API：✅ 正常工作
+- 流式API：✅ 真正的实时输出
+- 错误处理：✅ 完善的异常处理机制
+
+---
+
 ## 2025-09-16 - 多语言作文批改系统升级
 
 ### 主要更新
