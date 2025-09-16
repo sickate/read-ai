@@ -200,8 +200,9 @@
         {% include '_navigation.html' %}
 
         <div class="row">
-            <!-- 文本输入区域 -->
+            <!-- 文本输入和AI批改结果区域 -->
             <div class="col-md-7">
+                <!-- 作文输入框 -->
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
@@ -209,32 +210,35 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <textarea 
-                            id="essayText" 
-                            class="form-control" 
-                            rows="20" 
+                        <textarea
+                            id="essayText"
+                            class="form-control"
+                            rows="10"
                             placeholder="请在此处输入您的作文内容..."
-                            style="resize: vertical; min-height: 400px;"
+                            style="resize: vertical; min-height: 250px;"
                         ></textarea>
                         <!-- 作文要求选择器 -->
                         <div class="mt-3">
                             <div class="row">
-                                <div class="col-md-6">
-                                    <label for="wordCountSelect" class="form-label small">
-                                        <i class="fas fa-ruler me-1"></i>作文字数要求
+                                <div class="col-md-4">
+                                    <label for="languageSelect" class="form-label small">
+                                        <i class="fas fa-globe me-1"></i>语言
                                     </label>
-                                    <select id="wordCountSelect" class="form-select form-select-sm">
-                                        <option value="不限字数">不限字数</option>
-                                        <option value="300字左右">300字左右</option>
-                                        <option value="400字左右">400字左右</option>
-                                        <option value="500字左右">500字左右</option>
-                                        <option value="600字左右">600字左右</option>
-                                        <option value="700字左右">700字左右</option>
-                                        <option value="1000字左右">1000字左右</option>
-                                        <option value="1500字以上">1500字以上</option>
+                                    <select id="languageSelect" class="form-select form-select-sm">
+                                        <option value="zh" selected>中文</option>
+                                        <option value="en">English</option>
+                                        <option value="es">Español</option>
                                     </select>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
+                                    <label for="wordCountSelect" class="form-label small">
+                                        <i class="fas fa-ruler me-1"></i><span id="wordCountLabel">作文字数要求</span>
+                                    </label>
+                                    <select id="wordCountSelect" class="form-select form-select-sm">
+                                        <!-- 动态填充选项 -->
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
                                     <label for="gradeSelect" class="form-label small">
                                         <i class="fas fa-graduation-cap me-1"></i>年级
                                     </label>
@@ -264,53 +268,28 @@
                                 <i class="fas fa-edit me-1"></i>AI批改
                             </button>
                         </div>
-                        
-                        <!-- AI思考过程输出栏 -->
-                        <div id="aiThinkingPanel" class="mt-3" style="display: none;">
-                            <div class="card border-success">
-                                <div class="card-header bg-light">
-                                    <h6 class="mb-0">
-                                        <button class="btn btn-link text-success p-0 text-decoration-none" 
-                                                type="button" 
-                                                data-bs-toggle="collapse" 
-                                                data-bs-target="#aiThinkingContent" 
-                                                aria-expanded="true" 
-                                                aria-controls="aiThinkingContent"
-                                                id="aiThinkingToggle">
-                                            <i class="fas fa-robot me-2"></i>
-                                            <span id="aiThinkingTitle">AI正在思考...</span>
-                                            <i class="fas fa-chevron-down ms-2" id="aiThinkingChevron"></i>
-                                        </button>
-                                    </h6>
-                                </div>
-                                <div id="aiThinkingContent" class="collapse show">
-                                    <div class="card-body p-3">
-                                        <div id="aiThinkingOutput" 
-                                             class="border rounded p-3 bg-light text-dark position-relative" 
-                                             style="height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.9em; line-height: 1.4; resize: vertical; min-height: 100px; max-height: 600px;">
-                                            <div class="text-muted">等待AI开始批改...</div>
-                                            <div class="resize-hint">
-                                                <i class="fas fa-arrows-alt-v"></i>
-                                            </div>
-                                        </div>
-                                        <div class="mt-2 d-flex justify-content-between align-items-center">
-                                            <small class="text-muted">
-                                                <i class="fas fa-info-circle me-1"></i>
-                                                实时显示AI思考过程
-                                            </small>
-                                            <button id="clearThinkingBtn" class="btn btn-sm btn-outline-secondary">
-                                                <i class="fas fa-broom me-1"></i>清空输出
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+                    </div>
+                </div>
+
+                <!-- AI批改结果区域 -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-robot me-2 text-success"></i>AI批改结果
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="correctionResults">
+                            <div class="alert alert-info text-center">
+                                <i class="fas fa-info-circle me-2"></i>
+                                请输入作文后点击"AI批改"
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 右侧信息区域 -->
+            <!-- 右侧信息和调试区域 -->
             <div class="col-md-5">
                 <!-- 统计结果区域 -->
                 <div class="card">
@@ -329,18 +308,28 @@
                     </div>
                 </div>
 
-                <!-- AI批改结果区域 -->
-                <div class="card mt-3">
+                <!-- AI思考过程面板 -->
+                <div id="aiThinkingPanel" class="card mt-3" style="display: none;">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-robot me-2 text-success"></i>AI批改结果
-                        </h5>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-brain me-2 text-info"></i>
+                                <span id="aiThinkingTitle">AI正在思考...</span>
+                            </h6>
+                            <div>
+                                <button id="clearThinkingBtn" class="btn btn-sm btn-outline-secondary me-2">
+                                    <i class="fas fa-eraser"></i>
+                                </button>
+                                <a data-bs-toggle="collapse" href="#aiThinkingContent" role="button" aria-expanded="true" aria-controls="aiThinkingContent">
+                                    <i id="aiThinkingChevron" class="fas fa-chevron-up text-secondary"></i>
+                                </a>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div id="correctionResults">
-                            <div class="alert alert-info text-center">
-                                <i class="fas fa-info-circle me-2"></i>
-                                请输入作文后点击"AI批改"
+                    <div id="aiThinkingContent" class="collapse show">
+                        <div class="card-body p-0">
+                            <div id="aiThinkingOutput" class="p-3">
+                                <div class="text-muted">等待AI开始批改...</div>
                             </div>
                         </div>
                     </div>
@@ -382,6 +371,86 @@
         const clearThinkingBtn = document.getElementById('clearThinkingBtn');
         const wordCountSelect = document.getElementById('wordCountSelect');
         const gradeSelect = document.getElementById('gradeSelect');
+        const languageSelect = document.getElementById('languageSelect');
+        const wordCountLabel = document.getElementById('wordCountLabel');
+
+        // 语言对应的字数选项配置
+        const wordCountOptions = {
+            'zh': {
+                label: '作文字数要求',
+                options: [
+                    { value: '不限字数', text: '不限字数' },
+                    { value: '300字左右', text: '300字左右' },
+                    { value: '400字左右', text: '400字左右' },
+                    { value: '500字左右', text: '500字左右' },
+                    { value: '600字左右', text: '600字左右' },
+                    { value: '700字左右', text: '700字左右' },
+                    { value: '1000字左右', text: '1000字左右' },
+                    { value: '1500字以上', text: '1500字以上' }
+                ]
+            },
+            'en': {
+                label: 'Word Count Requirement',
+                options: [
+                    { value: 'No limit', text: 'No limit' },
+                    { value: '60 words', text: '60 words' },
+                    { value: '80 words', text: '80 words' },
+                    { value: '100 words', text: '100 words' },
+                    { value: '150 words', text: '150 words' },
+                    { value: '200 words', text: '200 words' },
+                    { value: '300 words', text: '300 words' },
+                    { value: '500 words', text: '500 words' },
+                    { value: '1000 words', text: '1000 words' }
+                ]
+            },
+            'es': {
+                label: 'Requisito de Palabras',
+                options: [
+                    { value: 'Sin límite', text: 'Sin límite' },
+                    { value: '60 palabras', text: '60 palabras' },
+                    { value: '80 palabras', text: '80 palabras' },
+                    { value: '100 palabras', text: '100 palabras' },
+                    { value: '150 palabras', text: '150 palabras' },
+                    { value: '200 palabras', text: '200 palabras' },
+                    { value: '300 palabras', text: '300 palabras' },
+                    { value: '500 palabras', text: '500 palabras' },
+                    { value: '1000 palabras', text: '1000 palabras' }
+                ]
+            }
+        };
+
+        // 更新字数选项
+        function updateWordCountOptions(language) {
+            const config = wordCountOptions[language];
+            wordCountLabel.textContent = config.label;
+
+            // 清空现有选项
+            wordCountSelect.innerHTML = '';
+
+            // 添加新选项
+            config.options.forEach((option, index) => {
+                const optionElement = document.createElement('option');
+                optionElement.value = option.value;
+                optionElement.textContent = option.text;
+                if (index === 0) optionElement.selected = true; // 默认选择第一个
+                wordCountSelect.appendChild(optionElement);
+            });
+        }
+
+        // 语言切换事件监听
+        languageSelect.addEventListener('change', function() {
+            const selectedLanguage = this.value;
+            updateWordCountOptions(selectedLanguage);
+
+            // 重新分析文本（如果有内容的话）
+            const text = essayText.value.trim();
+            if (text) {
+                analyzeText(text, selectedLanguage);
+            }
+        });
+
+        // 初始化字数选项（默认中文）
+        updateWordCountOptions('zh');
 
         // 验证关键元素是否存在
         console.log('DOM Elements verification:');
@@ -390,6 +459,7 @@
         console.log('aiThinkingOutput:', aiThinkingOutput);
         console.log('wordCountSelect:', wordCountSelect);
         console.log('gradeSelect:', gradeSelect);
+        console.log('languageSelect:', languageSelect);
         
         // 如果关键元素缺失，显示错误信息
         if (!correctionResults) {
@@ -448,7 +518,8 @@
                 alert('请先输入文本内容');
                 return;
             }
-            analyzeText(text);
+            const language = languageSelect.value;
+            analyzeText(text, language);
         });
 
         // AI批改作文
@@ -462,7 +533,8 @@
                 alert('作文内容过短，请输入至少50个字符的作文');
                 return;
             }
-            correctEssay(text);
+            const language = languageSelect.value;
+            correctEssay(text, language);
         });
 
         // 检测设备和浏览器类型
@@ -541,15 +613,16 @@
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
                 const text = essayText.value.trim();
+                const language = languageSelect.value;
                 if (text) {
-                    analyzeText(text);
+                    analyzeText(text, language);
                 } else {
                     showInitialMessage();
                 }
             }, 500); // 500ms 延迟
         });
 
-        function analyzeText(text) {
+        function analyzeText(text, language = 'zh') {
             // 显示加载状态
             statsResults.innerHTML = `
                 <div class="text-center">
@@ -566,7 +639,10 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ text: text })
+                body: JSON.stringify({
+                    text: text,
+                    language: language
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -593,23 +669,30 @@
         }
 
         function displayResults(result) {
+            const language = languageSelect.value;
+
+            // 根据语言调整显示内容
+            let mainCountLabel, mainCountValue, summaryText;
+
+            if (language === 'zh') {
+                mainCountLabel = '汉字';
+                mainCountValue = result.main_count || result.chinese_chars || 0;
+                summaryText = `共检测到 <span class="badge bg-primary">${mainCountValue}</span> 个汉字`;
+            } else {
+                mainCountLabel = language === 'en' ? 'Words' : 'Palabras';
+                mainCountValue = result.main_count || result.english_words || 0;
+                const wordText = language === 'en' ? 'words' : 'palabras';
+                summaryText = `共检测到 <span class="badge bg-primary">${mainCountValue}</span> 个${wordText}`;
+            }
+
             statsResults.innerHTML = `
                 <div class="row g-3">
                     <div class="col-6">
                         <div class="card bg-primary text-white h-100">
                             <div class="card-body text-center">
                                 <i class="fas fa-font fa-2x mb-2"></i>
-                                <h4 class="mb-1">${result.chinese_chars}</h4>
-                                <small>汉字</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="card bg-success text-white h-100">
-                            <div class="card-body text-center">
-                                <i class="fas fa-spell-check fa-2x mb-2"></i>
-                                <h4 class="mb-1">${result.english_words}</h4>
-                                <small>英文单词</small>
+                                <h4 class="mb-1">${mainCountValue}</h4>
+                                <small>${mainCountLabel}</small>
                             </div>
                         </div>
                     </div>
@@ -631,12 +714,19 @@
                             </div>
                         </div>
                     </div>
+                    <div class="col-6">
+                        <div class="card bg-success text-white h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-globe fa-2x mb-2"></i>
+                                <h4 class="mb-1">${result.language === 'zh' ? '中文' : result.language === 'en' ? 'EN' : 'ES'}</h4>
+                                <small>语言</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="mt-3">
                     <div class="alert alert-light">
-                        <strong>分析完成！</strong> 
-                        共检测到 <span class="badge bg-primary">${result.chinese_chars}</span> 个汉字，
-                        <span class="badge bg-success">${result.english_words}</span> 个英文单词。
+                        <strong>分析完成！</strong> ${summaryText}
                     </div>
                 </div>
             `;
@@ -805,7 +895,7 @@
             typeLine();
         }
 
-        function correctEssay(text) {
+        function correctEssay(text, language = 'zh') {
             // 检查网络状态
             if (!checkNetworkStatus()) {
                 correctionResults.innerHTML = `
@@ -853,7 +943,7 @@
                 console.log('Using fallback for better mobile experience');
                 appendToAiThinking('检测到较慢的网络或移动设备，使用稳定批改模式...\n');
                 setTimeout(() => {
-                    fallbackCorrectEssay(text);
+                    fallbackCorrectEssay(text, language);
                 }, 100);
                 return;
             }
@@ -873,7 +963,7 @@
                     appendToAiThinking('\n⏰ 流式处理超时，正在切换到稳定模式...\n');
                     // 给用户更友好的提示
                     appendToAiThinking('💡 提示：如果经常超时，可以刷新页面后尝试直接使用稳定模式\n');
-                    fallbackCorrectEssay(text);
+                    fallbackCorrectEssay(text, language);
                 }
             }, timeoutDuration);
             
@@ -882,10 +972,11 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     text: text,
                     word_count: wordCount,
-                    grade: grade
+                    grade: grade,
+                    language: language
                 })
             })
             .then(response => {
@@ -1001,7 +1092,7 @@
                                 appendToAiThinking('\n⚠️ 流式传输遇到问题，正在切换到稳定模式...\n');
                             }
                             
-                            fallbackCorrectEssay(text);
+                            fallbackCorrectEssay(text, language);
                         }
                     });
                 }
@@ -1046,12 +1137,12 @@
                     }
                     aiThinkingTitle.textContent = 'AI批改失败';
                     // 如果流式输出失败，尝试普通请求
-                    fallbackCorrectEssay(text);
+                    fallbackCorrectEssay(text, language);
                 }
             });
         }
 
-        function fallbackCorrectEssay(text) {
+        function fallbackCorrectEssay(text, language = 'zh') {
             console.log('fallbackCorrectEssay called');
             
             // 获取选择器的值
@@ -1086,10 +1177,11 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         text: text,
                         word_count: wordCount,
-                        grade: grade
+                        grade: grade,
+                        language: language
                     }),
                     timeout: 120000 // 2分钟超时
                 })

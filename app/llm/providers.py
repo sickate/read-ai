@@ -63,6 +63,7 @@ class XAIModel(str, Enum):
 class GeminiModel(str, Enum):
     """Gemini模型枚举"""
     GEMINI_2_5_PRO_EXP = "gemini-2.5-pro-exp-03-25"
+    GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite" # Ultra lightweight model for basic tasks
     GEMINI_2_0_FLASH = "gemini-2.0-flash" # in/out price per million: USD $0.1/$0.4
     GEMINI_2_0_FLASH_LITE = "gemini-2.0-flash-lite" # in/out price per million: USD $0.075/$0.3
     GEMINI_1_5_PRO = "gemini-1.5-pro"

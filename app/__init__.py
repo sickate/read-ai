@@ -350,14 +350,17 @@ def api_analyze_text():
             }), 400
         
         text = data['text']
+        language = data.get('language', 'zh')  # 默认中文
+
         if not text.strip():
             return jsonify({
                 "success": False,
                 "error": "文本内容不能为空"
             }), 400
-        
-        # 使用text_helper中的analyze_text函数分析文本
-        result = analyze_text(text)
+
+        # 使用新的多语言分析函数
+        from utils.text_helper import analyze_text_multilingual
+        result = analyze_text_multilingual(text, language)
         
         return jsonify({
             "success": True,
@@ -402,9 +405,10 @@ def api_correct_essay():
         # 获取额外参数
         word_count = data.get('word_count', '不限字数')
         grade = data.get('grade', '三年级')
-        
+        language = data.get('language', 'zh')  # 默认中文
+
         # 使用text_helper中的ai_correct_essay函数批改作文
-        result = ai_correct_essay(text, word_count, grade)
+        result = ai_correct_essay(text, word_count, grade, language)
         
         return jsonify(result)
         
@@ -453,13 +457,14 @@ def api_correct_essay_stream():
                 # 获取额外参数
                 word_count = data.get('word_count', '不限字数')
                 grade = data.get('grade', '三年级')
-                
+                language = data.get('language', 'zh')  # 默认中文
+
                 # 添加心跳机制，防止连接超时
                 last_heartbeat = time.time()
                 heartbeat_interval = 30  # 30秒发送一次心跳
-                
+
                 # 使用流式方式调用AI
-                result = ai_correct_essay_stream(text, word_count, grade)
+                result = ai_correct_essay_stream(text, word_count, grade, language)
                 
                 for chunk in result:
                     current_time = time.time()

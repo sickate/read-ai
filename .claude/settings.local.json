@@ -1,7 +1,24 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(fab deploy:*)",
+      "Bash(rsync:*)",
+      "Bash(chmod:*)",
+      "Bash(for:*)",
+      "Bash(if [ ! -f \"$mp3\" ])",
+      "Bash(then echo \"Missing MP3 for: $wma\")",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(grep:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(./convert_and_sync_audio.sh:*)",
+      "Bash(timeout:*)",
+      "Bash(python:*)",
+      "WebSearch",
+      "WebFetch(domain:ai.google.dev)"
     ],
     "deny": []
   }
