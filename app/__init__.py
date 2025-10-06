@@ -4,6 +4,7 @@ import json
 import threading
 import time
 from app.llm.volcano_audio import get_or_generate_subtitle, optimize_subtitles_with_llm
+from app.llm.tts_helper import text_to_speech, get_available_voices, get_available_languages
 import requests
 from utils.text_helper import analyze_text, ai_correct_essay, ai_correct_essay_stream
 from app.game_24 import game_24
@@ -598,26 +599,92 @@ def get_24_solutions():
         data = request.json
         if not data:
             return jsonify({"success": False, "error": "缺少请求数据"}), 400
-        
+
         cards = data.get('cards', [])
         target = data.get('target', 24)
-        
+
         if not cards:
             return jsonify({"success": False, "error": "缺少卡牌"}), 400
-        
+
         # 获取解答
         solutions = game_24.solve_24(cards, target)
-        
+
         return jsonify({
             "success": True,
             "solutions": solutions,
             "has_solution": len(solutions) > 0
         })
-        
+
     except Exception as e:
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+@app.route('/tts')
+def tts_page():
+    """在线朗读页面"""
+    voices = get_available_voices()
+    languages = get_available_languages()
+    return render_template('tts.html', current_page='tts', voices=voices, languages=languages)
+
+@app.route('/api/text-to-speech', methods=['POST'])
+def api_text_to_speech():
+    """
+    文本转语音的API接口
+    接收POST请求，包含text, voice, language参数
+    返回音频URL或音频数据
+    """
+    try:
+        data = request.json
+        if not data or 'text' not in data:
+            return jsonify({
+                "success": False,
+                "error": "缺少text参数"
+            }), 400
+
+        text = data['text']
+        if not text.strip():
+            return jsonify({
+                "success": False,
+                "error": "文本内容不能为空"
+            }), 400
+
+        # 检查文本长度限制
+        if len(text) > 5000:
+            return jsonify({
+                "success": False,
+                "error": "文本过长，最多支持5000个字符"
+            }), 400
+
+        # 获取参数
+        voice = data.get('voice', 'Cherry')
+        language = data.get('language', 'Auto')
+
+        # 调用TTS服务
+        result = text_to_speech(text=text, voice=voice, language=language, stream=False)
+
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "audio_url": result['audio_url'],
+                "format": result.get('format', 'wav')
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": result.get('error', '未知错误')
+            }), 500
+
+    except ValueError as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 400
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"服务器错误：{str(e)}"
         }), 500
 
 if __name__ == '__main__':

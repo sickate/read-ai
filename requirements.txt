@@ -1,5 +1,5 @@
-Flask>=2.2.0 
-dashscope
+Flask>=2.2.0
+dashscope>=1.24.6
 pendulum
 python-dotenv
 requests
