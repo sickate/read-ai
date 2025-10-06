@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>在线朗读 - 超能力训练场</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -174,10 +175,34 @@
                                 <p class="text-primary">正在生成语音，请稍候...</p>
                             </div>
                             <div id="audioPlayer" class="d-none">
-                                <audio controls class="audio-controls mb-3" id="audioElement">
+                                <audio id="audioElement" preload="metadata">
                                     您的浏览器不支持音频播放。
                                 </audio>
-                                <p class="text-muted small mb-0">
+
+                                <!-- 自定义控制器 -->
+                                <div class="d-flex justify-content-center flex-wrap gap-2 mb-3">
+                                    <button class="btn btn-outline-secondary" id="rewindBtn" title="后退3秒">
+                                        <i class="fa fa-backward"></i>
+                                    </button>
+                                    <button class="btn btn-outline-primary" id="playPauseBtn" title="播放/暂停">
+                                        <i class="fa fa-play"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" id="forwardBtn" title="前进3秒">
+                                        <i class="fa fa-forward"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" id="slowerBtn" title="减速">
+                                        <i class="fa fa-minus"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" id="fasterBtn" title="加速">
+                                        <i class="fa fa-plus"></i>
+                                    </button>
+                                </div>
+
+                                <div class="text-center mb-2">
+                                    <span id="speedDisplay" class="badge bg-primary">速度：1x</span>
+                                </div>
+
+                                <p class="text-muted small text-center mb-0">
                                     <i class="fas fa-info-circle"></i> 音频链接24小时内有效
                                 </p>
                             </div>
@@ -192,9 +217,10 @@
                     </div>
                     <div class="card-body">
                         <ul class="mb-0">
-                            <li><strong>多音色支持：</strong>提供多种音色选择，包括阳光积极、亲切自然、二次元等特色音色</li>
+                            <li><strong>多音色支持：</strong>提供12种音色选择，包括通用音色（Cherry、Ethan等）和方言音色（北京话、上海话、粤语等）</li>
                             <li><strong>多语言支持：</strong>支持中文、英文、日语、韩语等多种语言，自动检测语言类型</li>
                             <li><strong>中英混合：</strong>可以在同一段文本中混合使用中英文，系统会自然切换发音</li>
+                            <li><strong>播放控制：</strong>支持播放/暂停、快进/后退3秒、7级调速（0.5x - 3x）</li>
                             <li><strong>文本限制：</strong>单次最多支持5000个字符的文本转语音</li>
                             <li><strong>音频有效期：</strong>生成的音频URL在24小时内有效，请及时下载或收听</li>
                         </ul>
@@ -291,6 +317,76 @@
             }
         });
 
+        // 播放器控制
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const rewindBtn = document.getElementById('rewindBtn');
+        const forwardBtn = document.getElementById('forwardBtn');
+        const slowerBtn = document.getElementById('slowerBtn');
+        const fasterBtn = document.getElementById('fasterBtn');
+        const speedDisplay = document.getElementById('speedDisplay');
+
+        // 支持的播放速度列表
+        const speedSteps = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+        let speedIndex = 2; // 默认 1x
+
+        function updateSpeedDisplay() {
+            speedDisplay.textContent = `速度：${speedSteps[speedIndex]}x`;
+        }
+
+        // 播放/暂停
+        playPauseBtn.addEventListener('click', async function() {
+            if (audioElement.paused) {
+                try {
+                    await audioElement.play();
+                    this.querySelector('i').className = 'fa fa-pause';
+                } catch (e) {
+                    if (e.name !== 'AbortError') {
+                        console.error(e);
+                    }
+                }
+            } else {
+                audioElement.pause();
+                this.querySelector('i').className = 'fa fa-play';
+            }
+        });
+
+        // 监听音频播放状态
+        audioElement.addEventListener('play', function() {
+            playPauseBtn.querySelector('i').className = 'fa fa-pause';
+        });
+
+        audioElement.addEventListener('pause', function() {
+            playPauseBtn.querySelector('i').className = 'fa fa-play';
+        });
+
+        // 后退3秒
+        rewindBtn.addEventListener('click', function() {
+            audioElement.currentTime = Math.max(0, audioElement.currentTime - 3);
+        });
+
+        // 前进3秒
+        forwardBtn.addEventListener('click', function() {
+            audioElement.currentTime = Math.min(audioElement.duration || 0, audioElement.currentTime + 3);
+        });
+
+        // 减速
+        slowerBtn.addEventListener('click', function() {
+            if (speedIndex > 0) {
+                speedIndex--;
+                audioElement.playbackRate = speedSteps[speedIndex];
+                updateSpeedDisplay();
+            }
+        });
+
+        // 加速
+        fasterBtn.addEventListener('click', function() {
+            if (speedIndex < speedSteps.length - 1) {
+                speedIndex++;
+                audioElement.playbackRate = speedSteps[speedIndex];
+                updateSpeedDisplay();
+            }
+        });
+
         // 清空按钮
         const clearBtn = document.getElementById('clearBtn');
         clearBtn.addEventListener('click', function() {
@@ -304,7 +400,15 @@
             audioPlayer.classList.add('d-none');
             audioPlaceholder.classList.remove('d-none');
             audioPlayerContainer.classList.remove('active');
+
+            // 重置播放速度
+            speedIndex = 2;
+            audioElement.playbackRate = 1;
+            updateSpeedDisplay();
         });
+
+        // 初始化速度显示
+        updateSpeedDisplay();
     </script>
 </body>
 </html>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 背景圆形渐变 -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357ABD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="noteGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆形 -->
+  <circle cx="50" cy="50" r="48" fill="url(#bgGradient)" stroke="#2E5C8A" stroke-width="2"/>
+
+  <!-- 音符符号 -->
+  <g transform="translate(30, 25)">
+    <!-- 音符杆 -->
+    <rect x="22" y="15" width="4" height="35" fill="url(#noteGradient)" rx="2"/>
+    <!-- 音符头 -->
+    <ellipse cx="20" cy="50" rx="10" ry="7" fill="url(#noteGradient)" transform="rotate(-20 20 50)"/>
+    <!-- 音符旗 -->
+    <path d="M 26 15 Q 35 12, 38 20 Q 38 25, 32 28 L 26 25 Z" fill="url(#noteGradient)"/>
+  </g>
+
+  <!-- 书本元素（代表学习） -->
+  <g transform="translate(15, 60)">
+    <path d="M 0 10 L 0 0 Q 15 -2, 30 0 L 30 10 Q 15 12, 0 10 Z" fill="#FFFFFF" opacity="0.9"/>
+    <path d="M 0 10 L 0 0 Q 15 -2, 30 0 L 30 10 Q 15 12, 0 10 Z" fill="none" stroke="#E0E0E0" stroke-width="1"/>
+    <line x1="15" y1="0" x2="15" y2="10" stroke="#E0E0E0" stroke-width="1"/>
+  </g>
+
+  <!-- 装饰性闪光点 -->
+  <circle cx="75" cy="25" r="3" fill="#FFD700" opacity="0.8"/>
+  <circle cx="80" cy="35" r="2" fill="#FFD700" opacity="0.6"/>
+  <circle cx="25" cy="20" r="2.5" fill="#FFFFFF" opacity="0.7"/>
+</svg>

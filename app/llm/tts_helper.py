@@ -15,23 +15,29 @@ load_dotenv()
 
 
 class TTSVoice:
-    """Available TTS voices for Qwen3-TTS model"""
-    # 常用音色 - 中英文通用
-    LONGXIAOCHUN = "longxiaochun"  # 阳光积极
-    CHERRY = "Cherry"  # 亲切自然（女声）
-    ZHIBEI = "zhibei"  # 可靠成熟
-    ZHITIAN = "zhitian"  # 温柔知性
+    """Available TTS voices for Qwen3-TTS-Flash model"""
+    # 通用音色 - 支持多语言
+    CHERRY = "Cherry"  # 芊悦 - 亲切自然（女声）
+    ETHAN = "Ethan"  # 晨煦 - 标准普通话（男声，北方口音）
+    NOFISH = "Nofish"  # 不吃鱼 - 设计师风格（无卷舌音）
+    JENNIFER = "Jennifer"  # 詹妮弗 - 品牌级电影质感（女声）
+    RYAN = "Ryan"  # 甜茶 - 戏剧性高能量（男声）
+    KATERINA = "Katerina"  # 卡捷琳娜 - 成熟有韵律（女声）
+    ELIAS = "Elias"  # 墨讲师 - 学术叙事风格（男声）
 
-    # 特色音色
-    LONGWAN = "longwan"  # 二次元虚拟女友
-    LONGXIAOXIA = "longxiaoxia"  # 活泼少女
-    LONGJING = "longjing"  # 沉稳专业（男声）
-    LONGXIAOQIAN = "longxiaoqian"  # 温柔女声
+    # 方言音色 - 主要中文
+    JADA = "Jada"  # 上海-阿珍 - 上海话
+    DYLAN = "Dylan"  # 北京-晓东 - 北京胡同风
+    SUNNY = "Sunny"  # 四川-晴儿 - 四川话
+    LI = "Li"  # 南京-老李 - 南京话
+    MARCUS = "Marcus"  # 陕西-秦川 - 陕西话
+    ROY = "Roy"  # 闽南-阿杰 - 闽南话（台湾风）
+    PETER = "Peter"  # 天津-李彼得 - 天津话
 
-    # 方言音色
-    LONGXIAOBEI = "longxiaobei"  # 北京音
-    LONGYUE = "longyue"  # 粤语音
-    LONGSICHUAN = "longsichuan"  # 川渝音
+    # 粤语音色
+    ROCKY = "Rocky"  # 粤语-阿强 - 幽默粤语
+    KIKI = "Kiki"  # 粤语-阿清 - 香港风粤语
+    ERIC = "Eric"  # 四川-程川 - 成都话
 
 
 class TTSLanguage:
@@ -159,14 +165,20 @@ def get_available_voices() -> Dict[str, str]:
         Dict mapping voice ID to description
     """
     return {
-        TTSVoice.CHERRY: "Cherry - 亲切自然（女声）",
-        TTSVoice.LONGXIAOCHUN: "阳光积极",
-        TTSVoice.ZHIBEI: "可靠成熟",
-        TTSVoice.ZHITIAN: "温柔知性",
-        TTSVoice.LONGWAN: "二次元虚拟女友",
-        TTSVoice.LONGXIAOXIA: "活泼少女",
-        TTSVoice.LONGJING: "沉稳专业（男声）",
-        TTSVoice.LONGXIAOBEI: "北京音",
+        # 通用音色
+        TTSVoice.CHERRY: "Cherry - 芊悦（亲切自然女声）",
+        TTSVoice.ETHAN: "Ethan - 晨煦（标准普通话男声）",
+        TTSVoice.NOFISH: "Nofish - 不吃鱼（设计师风格）",
+        TTSVoice.JENNIFER: "Jennifer - 詹妮弗（电影质感女声）",
+        TTSVoice.RYAN: "Ryan - 甜茶（高能量男声）",
+        TTSVoice.KATERINA: "Katerina - 卡捷琳娜（成熟女声）",
+        TTSVoice.ELIAS: "Elias - 墨讲师（学术风男声）",
+        # 方言音色
+        TTSVoice.DYLAN: "Dylan - 北京晓东（北京话）",
+        TTSVoice.SUNNY: "Sunny - 四川晴儿（四川话）",
+        TTSVoice.JADA: "Jada - 上海阿珍（上海话）",
+        TTSVoice.ROCKY: "Rocky - 粤语阿强（粤语）",
+        TTSVoice.KIKI: "Kiki - 粤语阿清（香港粤语）",
     }
 
 
