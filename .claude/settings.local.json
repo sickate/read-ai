@@ -18,7 +18,15 @@
       "Bash(timeout:*)",
       "Bash(python:*)",
       "WebSearch",
-      "WebFetch(domain:ai.google.dev)"
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(bash:*)",
+      "Bash(lsof:*)",
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(pip show:*)",
+      "Bash(uv pip install:*)",
+      "Bash(curl:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }

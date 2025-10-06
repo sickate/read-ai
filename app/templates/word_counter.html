@@ -211,11 +211,54 @@
                         </h5>
                     </div>
                     <div class="card-body">
+                        <!-- OCR 图片识别区域 -->
+                        <div id="ocrUploadSection" class="mb-3 p-3 bg-light rounded">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-camera me-2 text-primary"></i>拍照识别作文
+                                </h6>
+                                <button id="toggleOcrBtn" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-chevron-up"></i>
+                                </button>
+                            </div>
+                            <div id="ocrUploadContent">
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <input type="file" id="imageFileInput" accept="image/*" capture="environment" class="form-control form-control-sm" style="display: none;">
+                                        <button id="captureBtn" class="btn btn-primary btn-sm w-100">
+                                            <i class="fas fa-camera me-1"></i>拍照
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <button id="uploadBtn" class="btn btn-info btn-sm w-100">
+                                            <i class="fas fa-upload me-1"></i>上传图片
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- 图片预览区域 -->
+                                <div id="imagePreview" class="mt-3" style="display: none;">
+                                    <div class="position-relative">
+                                        <img id="previewImage" src="" alt="预览" class="img-fluid rounded" style="max-height: 300px;">
+                                        <button id="removeImageBtn" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <button id="recognizeBtn" class="btn btn-success btn-sm w-100 mt-2">
+                                        <i class="fas fa-eye me-1"></i>识别文字
+                                    </button>
+                                </div>
+                                <!-- OCR 识别状态 -->
+                                <div id="ocrStatus" class="mt-2 text-muted small" style="display: none;">
+                                    <i class="fas fa-spinner fa-spin me-1"></i>正在识别文字...
+                                </div>
+                            </div>
+                        </div>
+
                         <textarea
                             id="essayText"
                             class="form-control"
                             rows="10"
-                            placeholder="请在此处输入您的作文内容..."
+                            placeholder="请在此处输入您的作文内容，或使用上方的拍照识别功能..."
                             style="resize: vertical; min-height: 250px;"
                         ></textarea>
                         <!-- 作文要求选择器 -->
@@ -1463,6 +1506,143 @@
                 }
             }, 1000);
         }
+
+        // ========== OCR 图片识别功能 ==========
+        const imageFileInput = document.getElementById('imageFileInput');
+        const captureBtn = document.getElementById('captureBtn');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImage = document.getElementById('previewImage');
+        const removeImageBtn = document.getElementById('removeImageBtn');
+        const recognizeBtn = document.getElementById('recognizeBtn');
+        const ocrStatus = document.getElementById('ocrStatus');
+        const toggleOcrBtn = document.getElementById('toggleOcrBtn');
+        const ocrUploadContent = document.getElementById('ocrUploadContent');
+
+        let selectedImageFile = null;
+
+        // 折叠/展开 OCR 区域
+        toggleOcrBtn.addEventListener('click', function() {
+            if (ocrUploadContent.style.display === 'none') {
+                ocrUploadContent.style.display = 'block';
+                toggleOcrBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
+            } else {
+                ocrUploadContent.style.display = 'none';
+                toggleOcrBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+            }
+        });
+
+        // 拍照按钮
+        captureBtn.addEventListener('click', function() {
+            imageFileInput.click();
+        });
+
+        // 上传图片按钮
+        uploadBtn.addEventListener('click', function() {
+            imageFileInput.click();
+        });
+
+        // 文件选择处理
+        imageFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // 检查文件类型
+            if (!file.type.startsWith('image/')) {
+                alert('请选择图片文件！');
+                return;
+            }
+
+            // 检查文件大小 (最大 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('图片文件过大，请选择小于10MB的图片！');
+                return;
+            }
+
+            selectedImageFile = file;
+
+            // 显示预览
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                imagePreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 移除图片
+        removeImageBtn.addEventListener('click', function() {
+            selectedImageFile = null;
+            imageFileInput.value = '';
+            imagePreview.style.display = 'none';
+            previewImage.src = '';
+        });
+
+        // 识别文字
+        recognizeBtn.addEventListener('click', function() {
+            if (!selectedImageFile) {
+                alert('请先选择图片！');
+                return;
+            }
+
+            // 显示识别状态
+            ocrStatus.style.display = 'block';
+            recognizeBtn.disabled = true;
+
+            // 准备表单数据
+            const formData = new FormData();
+            formData.append('image', selectedImageFile);
+            formData.append('language', languageSelect.value);
+
+            // 发送 OCR 请求
+            fetch('/api/ocr-recognize', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                ocrStatus.style.display = 'none';
+                recognizeBtn.disabled = false;
+
+                if (data.success) {
+                    // 将识别的文字填入文本框
+                    const recognizedText = data.text || '';
+
+                    if (recognizedText.trim()) {
+                        // 如果文本框已有内容，询问是否追加或替换
+                        if (essayText.value.trim()) {
+                            const replace = confirm('文本框已有内容。\n点击"确定"替换现有内容，点击"取消"追加到末尾。');
+                            if (replace) {
+                                essayText.value = recognizedText;
+                            } else {
+                                essayText.value += '\n\n' + recognizedText;
+                            }
+                        } else {
+                            essayText.value = recognizedText;
+                        }
+
+                        // 自动触发字数统计
+                        analyzeText(essayText.value, languageSelect.value);
+
+                        // 提示成功
+                        alert(`OCR 识别成功！识别到 ${data.total_lines || 0} 行文字。`);
+
+                        // 清除图片预览
+                        removeImageBtn.click();
+                    } else {
+                        alert('未识别到文字内容，请确保图片清晰且包含文字。');
+                    }
+                } else {
+                    alert(`OCR 识别失败：${data.error || '未知错误'}`);
+                }
+            })
+            .catch(error => {
+                console.error('OCR request error:', error);
+                ocrStatus.style.display = 'none';
+                recognizeBtn.disabled = false;
+                alert(`OCR 识别失败：网络错误，请检查网络连接后重试`);
+            });
+        });
     </script>
 </body>
 </html> 

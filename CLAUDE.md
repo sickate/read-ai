@@ -8,8 +8,9 @@ This is an English learning platform focused on elementary school English textbo
 
 - **Audio Player**: Stream elementary school English textbook audio files (ET3 series)
 - **Subtitle Generation**: AI-powered subtitle generation using Alibaba Cloud's audio analysis
-- **Text Analysis**: Word count and text analysis tools for Chinese essays  
+- **Text Analysis**: Word count and text analysis tools for Chinese essays
 - **AI Essay Correction**: Real-time AI-powered essay correction with streaming feedback
+- **OCR Essay Recognition**: Photo-to-text conversion using Gemini Vision API for essay images
 - **24-Point Math Game**: Interactive mathematical puzzle game
 
 ## Development Commands
@@ -42,14 +43,17 @@ pip install -r requirements.txt
 
 ### Core Structure
 - **`app/__init__.py`**: Main Flask application with all routes and core functionality
-- **`app/llm/`**: LLM provider configurations and audio processing
-  - **`providers.py`**: Multi-provider LLM configuration (Aliyun, OpenAI, SiliconFlow, etc.)
+- **`app/llm/`**: LLM provider configurations and AI processing
+  - **`providers.py`**: Multi-provider LLM configuration (Aliyun, OpenAI, SiliconFlow, Gemini, etc.)
   - **`volcano_audio.py`**: Audio subtitle generation using Alibaba Cloud services
+  - **`gemini_ocr.py`**: OCR text recognition using Gemini 2.5 Flash vision capabilities
+  - **`tts_helper.py`**: Text-to-speech functionality
 - **`utils/`**: Core utilities
   - **`text_helper.py`**: Text analysis and AI essay correction with streaming support
 - **`app/templates/`**: HTML templates with responsive Bootstrap design
 - **`app/static/audios/`**: Audio file storage (ET3 textbook series)
 - **`app/static/subtitles/`**: Generated SRT subtitle files
+- **`app/static/temp/`**: Temporary storage for uploaded images (auto-cleanup)
 
 ### Key Features
 
@@ -57,9 +61,9 @@ pip install -r requirements.txt
 The app supports multiple LLM providers configured in `app/llm/providers.py`:
 - **Alibaba Cloud**: Primary provider using DashScope API (deepseek-r1, qwen-max models)
 - **OpenAI**: GPT-4, GPT-4o models
-- **SiliconFlow**: DeepSeek-V3, Qwen models  
+- **SiliconFlow**: DeepSeek-V3, Qwen models
 - **XAI**: Grok-2 models
-- **Google Gemini**: Gemini 2.0 Flash models
+- **Google Gemini**: Gemini 2.5 Flash models (used for both text generation and vision/OCR)
 
 #### Audio Processing
 - Supports MP3/M4A audio files organized by book/disc structure
@@ -102,14 +106,29 @@ Uses Fabric for deployment automation:
   - Network status detection: Warns users about connectivity issues
   - Error recovery: Detailed error messages with actionable suggestions
 
-### Audio Subtitle Generation  
+### Audio Subtitle Generation
 - Generates SRT format subtitles using Alibaba Cloud's audio recognition
 - Requires publicly accessible audio URLs for cloud processing
 - Caches generated subtitles locally
+
+### OCR Essay Recognition
+- Uses Gemini 2.5 Flash vision API for image-to-text conversion
+- Supports multiple languages: Chinese, English, Spanish
+- Intelligent text extraction with context understanding
+- Features:
+  - Photo capture (mobile camera support)
+  - File upload (JPG, PNG, BMP, GIF, WebP)
+  - Image preview before recognition
+  - Automatic text insertion into essay editor
+  - Smart formatting preservation (paragraphs, line breaks)
+  - Noise filtering (ignores margin notes, creases, etc.)
+- API endpoint: `/api/ocr-recognize`
+- Temporary image files auto-deleted after processing
 
 ### Security Considerations
 - No user authentication system currently implemented
 - File uploads restricted to audio formats
 - API keys stored in environment variables only
 - Input validation for text analysis and essay correction
-- 项目运行在本地 5010 端口且可以自动 reload, 任何修改能直接生效. 不需要额外启动 flask 实例来测试
+- 项目运行在本地 5010 端口且可以自动 reload, 任何修改能直接生效. 不需要额外启动 flask 实例来测试。如果 5010 端口没有 flask 项目在监听，你可以用 "flask run --debug --port 5010"命令自行启动
+- 项目有 uv 管理的 venv 环境在当前目录的 .venv 子目录下。新加或升级 python package 时要同步更新 requirements.txt 文件

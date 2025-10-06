@@ -99,8 +99,9 @@ def get_smart_llm_provider(language: str = "zh"):
     hostname = socket.gethostname().lower()
 
     if language == "zh":
-        provider = get_provider_config('aliyun')
-        model = AliyunModel.DEEPSEEK_R1.value
+        # provider = get_provider_config('aliyun')
+        provider = get_provider_config('gemini')
+        model = GeminiModel.GEMINI_2_5_FLASH.value
     else:
         try:
             provider = get_provider_config('gemini')

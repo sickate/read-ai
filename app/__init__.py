@@ -3,8 +3,10 @@ import os
 import json
 import threading
 import time
+import base64
 from app.llm.volcano_audio import get_or_generate_subtitle, optimize_subtitles_with_llm
 from app.llm.tts_helper import text_to_speech, get_available_voices, get_available_languages
+from app.llm.gemini_ocr import recognize_text_from_image
 import requests
 from utils.text_helper import analyze_text, ai_correct_essay, ai_correct_essay_stream
 from app.game_24 import game_24
@@ -13,6 +15,10 @@ app = Flask(__name__)
 
 AUDIO_ROOT = os.path.join(app.static_folder, 'audios')
 SUBTITLE_ROOT = os.path.join(app.static_folder, 'subtitles')
+TEMP_UPLOAD_DIR = os.path.join(app.static_folder, 'temp')
+
+# 确保临时目录存在
+os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
 @app.route('/')
 def index():
@@ -685,6 +691,97 @@ def api_text_to_speech():
         return jsonify({
             "success": False,
             "error": f"服务器错误：{str(e)}"
+        }), 500
+
+@app.route('/api/ocr-recognize', methods=['POST'])
+def api_ocr_recognize():
+    """
+    OCR 图片文字识别 API
+    接收图片文件或 base64 编码的图片，返回识别的文字
+    """
+    try:
+        # 检查是否有上传的文件
+        if 'image' in request.files:
+            # 处理文件上传
+            image_file = request.files['image']
+
+            if not image_file.filename:
+                return jsonify({
+                    "success": False,
+                    "error": "未选择图片文件"
+                }), 400
+
+            # 检查文件类型
+            allowed_extensions = {'png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'}
+            file_ext = image_file.filename.rsplit('.', 1)[-1].lower()
+
+            if file_ext not in allowed_extensions:
+                return jsonify({
+                    "success": False,
+                    "error": f"不支持的图片格式: {file_ext}。支持的格式: {', '.join(allowed_extensions)}"
+                }), 400
+
+            # 保存临时文件
+            import uuid
+            temp_filename = f"{uuid.uuid4()}.{file_ext}"
+            temp_filepath = os.path.join(TEMP_UPLOAD_DIR, temp_filename)
+
+            image_file.save(temp_filepath)
+
+            try:
+                # 获取语言参数
+                language = request.form.get('language', 'auto')
+
+                # 调用 OCR 识别
+                result = recognize_text_from_image(
+                    image_path=temp_filepath,
+                    language=language
+                )
+
+                return jsonify(result)
+
+            finally:
+                # 删除临时文件
+                try:
+                    if os.path.exists(temp_filepath):
+                        os.remove(temp_filepath)
+                except:
+                    pass
+
+        elif request.json and 'image_base64' in request.json:
+            # 处理 base64 编码的图片
+            data = request.json
+            image_base64 = data.get('image_base64', '')
+            language = data.get('language', 'auto')
+
+            # 移除 base64 前缀（如果有）
+            if ',' in image_base64:
+                image_base64 = image_base64.split(',', 1)[1]
+
+            if not image_base64:
+                return jsonify({
+                    "success": False,
+                    "error": "image_base64 数据为空"
+                }), 400
+
+            # 调用 OCR 识别
+            result = recognize_text_from_image(
+                image_base64=image_base64,
+                language=language
+            )
+
+            return jsonify(result)
+
+        else:
+            return jsonify({
+                "success": False,
+                "error": "未找到图片数据。请上传图片文件或提供 image_base64 参数"
+            }), 400
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"OCR 识别失败：{str(e)}"
         }), 500
 
 if __name__ == '__main__':
