@@ -1,27 +1,126 @@
-<!-- 导航栏 -->
-<nav class="navbar navbar-expand-lg navbar-light bg-light rounded mb-4">
+<!-- 统一的响应式Header -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-gradient shadow-sm mb-4">
     <div class="container-fluid">
-        <ul class="navbar-nav me-auto">
-            <li class="nav-item">
-                <a class="nav-link {% if current_page == 'home' %}active{% endif %}" href="/">
-                    <i class="fas fa-headphones me-1"></i>英语跟读
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if current_page == 'tts' %}active{% endif %}" href="/tts">
-                    <i class="fas fa-volume-up me-1"></i>在线朗读
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if current_page == 'word-counter' %}active{% endif %}" href="/word-counter">
-                    <i class="fas fa-calculator me-1"></i>作文字数统计
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if current_page == 'game-24' %}active{% endif %}" href="/game-24">
-                    <i class="fas fa-gamepad me-1"></i>24点游戏
-                </a>
-            </li>
-        </ul>
+        <!-- 品牌Logo和项目名称 -->
+        <a class="navbar-brand d-flex align-items-center" href="/">
+            <i class="fas fa-rocket me-2 fs-4"></i>
+            <span class="fw-bold">超能力训练场</span>
+        </a>
+
+        <!-- 移动端汉堡菜单按钮 -->
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <!-- 导航菜单 -->
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link {% if current_page == 'home' %}active{% endif %}"
+                       href="/" aria-current="{% if current_page == 'home' %}page{% endif %}">
+                        <i class="fas fa-headphones me-1"></i>
+                        <span>英语跟读</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if current_page == 'tts' %}active{% endif %}"
+                       href="/tts" aria-current="{% if current_page == 'tts' %}page{% endif %}">
+                        <i class="fas fa-volume-up me-1"></i>
+                        <span>在线朗读</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if current_page == 'word-counter' %}active{% endif %}"
+                       href="/word-counter" aria-current="{% if current_page == 'word-counter' %}page{% endif %}">
+                        <i class="fas fa-calculator me-1"></i>
+                        <span>作文字数统计</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if current_page == 'game-24' %}active{% endif %}"
+                       href="/game-24" aria-current="{% if current_page == 'game-24' %}page{% endif %}">
+                        <i class="fas fa-gamepad me-1"></i>
+                        <span>24点游戏</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
-</nav> 
+</nav>
+
+<style>
+    /* Header 渐变背景 */
+    .navbar.bg-gradient {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+
+    /* 品牌Logo样式 */
+    .navbar-brand {
+        font-size: 1.5rem;
+        transition: transform 0.3s ease;
+    }
+
+    .navbar-brand:hover {
+        transform: scale(1.05);
+    }
+
+    /* 导航链接样式 */
+    .navbar-nav .nav-link {
+        padding: 0.5rem 1rem;
+        margin: 0 0.25rem;
+        border-radius: 0.375rem;
+        transition: all 0.3s ease;
+        font-weight: 500;
+    }
+
+    .navbar-nav .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        transform: translateY(-2px);
+    }
+
+    /* 当前页面高亮 */
+    .navbar-nav .nav-link.active {
+        background-color: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    /* 移动端优化 */
+    @media (max-width: 991px) {
+        .navbar-nav {
+            padding-top: 1rem;
+        }
+
+        .navbar-nav .nav-link {
+            margin: 0.25rem 0;
+            padding: 0.75rem 1rem;
+        }
+
+        .navbar-brand {
+            font-size: 1.25rem;
+        }
+    }
+
+    /* iPad 横屏优化 */
+    @media (min-width: 768px) and (max-width: 991px) {
+        .navbar-nav .nav-link span {
+            display: inline;
+        }
+    }
+
+    /* iPhone 优化 */
+    @media (max-width: 575px) {
+        .navbar-brand {
+            font-size: 1.1rem;
+        }
+
+        .navbar-brand i {
+            font-size: 1.2rem;
+        }
+    }
+
+    /* 阴影效果 */
+    .navbar.shadow-sm {
+        box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.15) !important;
+    }
+</style>

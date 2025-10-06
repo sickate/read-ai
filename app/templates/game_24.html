@@ -85,13 +85,10 @@
     </style>
 </head>
 <body>
-    <div class="container py-5">
+    {% include '_navigation.html' %}
+
+    <div class="container py-4">
         <div class="game-container">
-            <h1 class="text-center mb-4">
-                <i class="fas fa-gamepad me-2"></i>24点游戏
-            </h1>
-            
-            {% include '_navigation.html' %}
 
             <!-- 游戏设置 -->
             <div class="game-controls">
